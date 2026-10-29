@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VoiceBridge Google Sign-In Test</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      margin: 40px;
+      max-width: 850px;
+    }
+    button {
+      margin-top: 20px;
+      padding: 8px 12px;
+    }
+    pre {
+      padding: 16px;
+      background: #f4f4f4;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+  </style>
+</head>
+<body>
+  <h1>VoiceBridge Google Sign-In Test</h1>
+  <p id="status">Preparing sign-in...</p>
+  <div id="google-button"></div>
+  <button id="restart" type="button">Restart sign-in</button>
+  <pre id="result"></pre>
+
+  <script>
+    const statusElement = document.getElementById("status");
+    const outputElement = document.getElementById("result");
+    const buttonElement = document.getElementById("google-button");
+
+    let challenge = null;
+    let submitted = false;
+
+    document.getElementById("restart").addEventListener("click", () => {
+      window.location.reload();
+    });
+
+    async function postJSON(path, body) {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        cache: "no-store"
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || `HTTP ${response.status}`);
+      }
+
+      return payload;
+    }
+
+    async function handleCredential(credentialResponse) {
+      if (submitted) return;
+
+      submitted = true;
+      buttonElement.hidden = true;
+      statusElement.textContent = "Verifying Google sign-in with Flask...";
+
+      try {
+        const result = await postJSON("/auth/google", {
+          id_token: credentialResponse.credential, // credentialResponse.credential is the ID token returned by Google
+          nonce: challenge.nonce
+        });
+
+        if (typeof result.access_token !== "string" || !result.access_token) {
+          throw new Error("Flask did not return a session token.");
+        }
+
+        statusElement.textContent = "Signed in. Flask session token received.";
+        outputElement.textContent = JSON.stringify(result, null, 2);
+      } catch (error) {
+        statusElement.textContent =
+          error.message + " Use Restart sign-in to try again.";
+      }
+    }
+
+    window.addEventListener("load", async () => {
+      try {
+        if (!window.google?.accounts?.id) {
+          throw new Error("Google sign-in could not load.");
+        }
+
+        challenge = await postJSON("/auth/google/challenge", {});
+
+        google.accounts.id.initialize({
+          client_id: challenge.client_id,
+          nonce: challenge.nonce,
+          callback: handleCredential,
+          ux_mode: "popup",
+          auto_select: false
+        });
+
+        google.accounts.id.renderButton(buttonElement, {
+          theme: "outline",
+          size: "large"
+        });
+
+        statusElement.textContent = "Ready. Click Sign in with Google.";
+      } catch (error) {
+        statusElement.textContent =
+          error.message + " Use Restart sign-in to try again.";
+      }
+    });
+  </script>
+</body>
+</html>

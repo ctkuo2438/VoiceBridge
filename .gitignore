@@ -1,0 +1,85 @@
+# Environment secrets; keep the configuration templates.
+.env
+.env.*
+!.env_example
+!.env.example
+!.env.*.example
+
+# Private Google credentials and signing material.
+credentials/
+secrets/
+credentail.json
+credential.json
+credentials.json
+service-account*.json
+service_account*.json
+client_secret*.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+key.properties
+keystore.properties
+
+# Python / uv environments and generated files.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.uv-cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+.tox/
+.nox/
+build/
+dist/
+
+# Local user data and SQLite sidecar files.
+/instance/
+*.sqlite
+*.sqlite3
+*.db
+*.sqlite-*
+*.sqlite3-*
+*.db-*
+/recordings/
+/uploads/
+/tmp/
+/temp/
+
+# Test coverage and runtime logs.
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.log
+*.hprof
+
+# Android / Gradle caches, local SDK paths, and exported builds.
+.gradle/
+.kotlin/
+.externalNativeBuild/
+.cxx/
+local.properties
+captures/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Editor and operating-system files.
+.idea/
+.vscode/
+*.iml
+.DS_Store
+._*
+*~
+*.swp
+*.swo
+*.orig
+*.rej
