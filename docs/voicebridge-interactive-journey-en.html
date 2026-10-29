@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="An interactive, end-to-end explanation of VoiceBridge: Google sign-in, the Flask session, Compose, ViewModel, Repository, Retrofit, OkHttp, speech, chat, memos, and storage.">
+  <title>VoiceBridge — One Connected Journey</title>
+  <style>
+    :root {
+      color-scheme:dark;
+      --bg:#151718; --panel:#1c1f21; --soft:#24282b; --ink:#f0f1ef;
+      --muted:#afb5b9; --line:#3d4448; --edge:#596167; --accent:#ade1da;
+      --accent-soft:#223b39; --quiet:#222a2c; --gold:#ead7a0;
+      --shadow:0 10px 35px #00000019;
+    }
+    :root[data-theme="light"] {
+      color-scheme:light;
+      --bg:#f6f7f5; --panel:#ffffff; --soft:#eef1ef; --ink:#1c2528;
+      --muted:#56646a; --line:#c8d0ce; --edge:#8b999d; --accent:#176b62;
+      --accent-soft:#dfefea; --quiet:#e9eeeb; --gold:#705313;
+      --shadow:0 10px 35px #253d3009;
+    }
+    *,*::before,*::after { box-sizing:border-box; }
+    html { background:var(--bg); scroll-behavior:smooth; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.6 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    h1,h2,h3,p,li,button,summary,code,dd,dt,figcaption { overflow-wrap:anywhere; }
+    button,input { font:inherit; }
+    button { cursor:pointer; }
+    button:disabled { cursor:default; opacity:.42; }
+    button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,[role="button"]:focus-visible {
+      outline:3px solid var(--accent); outline-offset:4px;
+    }
+    button { color:var(--ink); background:transparent; }
+    a { color:var(--accent); text-underline-offset:4px; }
+    .page { max-width:1480px; margin:auto; padding:25px 32px 32px; }
+    .masthead { display:flex; align-items:center; justify-content:space-between; gap:15px; }
+    .brand { display:flex; align-items:center; gap:10px; font-size:14px; font-weight:650; letter-spacing:.015em; }
+    .brand-mark { width:27px; height:27px; color:var(--accent); }
+    .brand span:last-child { color:var(--muted); font-weight:400; border-left:1px solid var(--line); padding-left:12px; }
+    .tools { display:flex; flex-wrap:wrap; gap:8px; }
+    .small-button { padding:7px 12px; border:1px solid var(--line); border-radius:7px; font-size:12px; }
+    .small-button:hover { background:var(--soft); }
+    .hero { padding:28px 0 23px; }
+    .eyebrow { margin:0 0 8px; color:var(--accent); font-size:11px; font-weight:650; letter-spacing:.13em; text-transform:uppercase; }
+    h1 { margin:0 0 12px; font-size:clamp(31px,3.8vw,49px); font-weight:580; letter-spacing:-.045em; line-height:1.15; }
+    .hero p:last-child { margin:0; font-size:clamp(16px,1.8vw,20px); color:var(--muted); }
+    .hero strong { color:var(--ink); font-weight:550; }
+    .workbench { border:1px solid var(--line); border-radius:14px; background:var(--panel); box-shadow:var(--shadow); overflow:hidden; }
+    .route-bar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; padding:16px 20px; }
+    .route-switch { display:flex; flex-wrap:wrap; gap:5px; padding:4px; border:1px solid var(--line); border-radius:9px; background:var(--bg); }
+    .route-switch button { border:0; border-radius:6px; padding:7px 16px; font-size:13px; }
+    .route-switch button[aria-pressed="true"] { background:var(--accent); color:var(--bg); font-weight:650; }
+    :root[data-theme="light"] .route-switch button[aria-pressed="true"] { color:white; }
+    .route-caption { margin:0; font-size:12px; color:var(--muted); }
+    .stages { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); border-block:1px solid var(--line); }
+    .stage { position:relative; border:0; border-right:1px solid var(--line); padding:13px 15px; text-align:left; color:var(--muted); font-size:13px; }
+    .stage:last-child { border-right:0; }
+    .stage span { display:inline-block; margin-right:7px; opacity:.7; font-size:11px; }
+    .stage[aria-current="step"] { color:var(--accent); background:var(--accent-soft); }
+    .stage[aria-current="step"]::after { position:absolute; height:2px; background:var(--accent); content:""; bottom:0; left:0; right:0; }
+    .stage:hover { color:var(--ink); }
+    .main-grid { display:grid; grid-template-columns:minmax(0,1fr) 316px; }
+    .main-grid>*,.inspector>*,.readouts>*,.key-grid>*,.source-grid>* { min-width:0; }
+    .diagram-area { padding:17px 14px 10px; min-width:0; }
+    .diagram-hint { display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px; padding:0 12px 4px; color:var(--muted); font-size:11px; }
+    .legend-stroke { width:21px; height:2px; display:inline-block; margin:0 6px 3px 0; background:var(--accent); }
+    .mobile-hint { display:none; }
+    figure { margin:0; }
+    .diagram-scroll { overflow-x:auto; overscroll-behavior-inline:contain; }
+    #architecture { width:100%; height:auto; display:block; }
+    svg text { font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; fill:var(--ink); }
+    .region { fill:var(--bg); stroke:var(--line); stroke-width:1.3; }
+    .region-label { fill:var(--muted); font-size:14px; letter-spacing:2px; font-weight:600; }
+    .region-sub { fill:var(--muted); font-size:12px; }
+    .edge { fill:none; stroke:var(--edge); stroke-width:1.5; opacity:.4; }
+    .edge.active { stroke:var(--accent); stroke-width:3; opacity:1; stroke-dasharray:7 6; animation:flow 1.3s linear infinite; }
+    .edge.active.reverse { animation-direction:reverse; }
+    @keyframes flow { to { stroke-dashoffset:-26; } }
+    .node { cursor:pointer; }
+    .node rect { fill:var(--panel); stroke:var(--line); stroke-width:1.7; transition:fill .2s,stroke .2s; }
+    .node text { pointer-events:none; }
+    .node .node-title { font-size:22px; font-weight:570; }
+    .node .node-sub { font-size:14px; fill:var(--muted); }
+    .node.aux .node-title { font-size:19px; }
+    .node.active rect { fill:var(--accent-soft); stroke:var(--accent); stroke-width:2.3; }
+    .node.active .node-title { fill:var(--accent); }
+    .node:hover rect,.node.inspected rect { stroke:var(--ink); stroke-width:2.4; }
+    .edge-label { fill:var(--muted); font-size:12px; letter-spacing:.3px; }
+    figcaption { margin:0 11px 8px; color:var(--muted); font-size:12px; line-height:1.6; }
+    .inspector { border-left:1px solid var(--line); padding:24px 23px; display:flex; flex-direction:column; }
+    .step-meta { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; color:var(--accent); font-size:11px; font-weight:650; letter-spacing:.06em; text-transform:uppercase; }
+    .step-meta span:last-child { color:var(--muted); }
+    .inspector h2 { margin:19px 0 12px; font-size:26px; font-weight:560; line-height:1.18; letter-spacing:-.03em; }
+    .step-description { margin:0 0 20px; font-size:14px; color:var(--muted); line-height:1.7; }
+    .handoff { border-left:2px solid var(--accent); padding-left:12px; margin:0 0 20px; font-size:13px; line-height:1.7; }
+    .fact { padding:12px 0; border-top:1px solid var(--line); }
+    .fact-label { display:block; margin-bottom:4px; font-size:10px; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); }
+    .fact-value { font-size:13px; line-height:1.65; margin:0; }
+    .endpoint { font:12px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace; color:var(--accent); }
+    .step-result { margin:auto 0 0; padding-top:14px; font-size:13px; color:var(--ink); }
+    .step-result::before { content:"↳ "; color:var(--accent); }
+    .back-to-step { align-self:flex-start; margin-top:18px; }
+    .readouts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border-top:1px solid var(--line); }
+    .readout { padding:13px 20px; border-right:1px solid var(--line); }
+    .readout:last-child { border-right:0; }
+    .readout-label { display:block; font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.1em; margin-bottom:2px; }
+    .readout-value { font-size:13px; }
+    .controls { display:flex; align-items:center; flex-wrap:wrap; gap:9px; padding:13px 20px; border-bottom:1px solid var(--line); }
+    .control { display:inline-flex; justify-content:center; align-items:center; gap:7px; min-height:38px; padding:7px 15px; border:1px solid var(--line); border-radius:7px; font-size:13px; }
+    .control:hover:not(:disabled) { border-color:var(--accent); }
+    .control.primary { background:var(--accent); color:var(--bg); border-color:var(--accent); font-weight:650; }
+    :root[data-theme="light"] .control.primary { color:#fff; }
+    .playback { display:flex; align-items:center; gap:12px; margin-left:9px; flex:1; min-width:180px; }
+    .playback input { accent-color:var(--accent); flex:1; min-width:50px; }
+    #step-counter { color:var(--muted); font-size:12px; white-space:nowrap; min-width:45px; }
+    .control-label { color:var(--muted); font-size:11px; }
+    .keys { margin-top:11px; display:flex; flex-wrap:wrap; justify-content:space-between; gap:9px; color:var(--muted); font-size:11px; }
+    kbd { font:11px/1.3 system-ui,sans-serif; padding:1px 4px; border:1px solid var(--line); border-radius:3px; }
+    .notes { margin-top:26px; display:grid; gap:12px; }
+    details { border:1px solid var(--line); border-radius:9px; background:var(--panel); }
+    summary { padding:14px 18px; cursor:pointer; font-size:13px; }
+    summary::marker { color:var(--accent); }
+    .key-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:22px; padding:4px 20px 20px; }
+    .key-grid h3 { margin:0 0 7px; font-size:15px; font-weight:600; }
+    .key-grid p { color:var(--muted); font-size:13px; margin:0; }
+    .journey-list { list-style:none; margin:0; padding:0 15px 17px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px 22px; }
+    .journey-list button { width:100%; display:flex; align-items:baseline; gap:12px; text-align:left; padding:9px 8px; border:0; border-radius:5px; font-size:13px; }
+    .journey-list button:hover,.journey-list button[aria-current="step"] { background:var(--accent-soft); color:var(--accent); }
+    .journey-list .number { min-width:20px; color:var(--muted); font-size:11px; }
+    .source-grid { padding:0 20px 19px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 25px; }
+    .source-grid p { margin:0; font-size:12px; line-height:1.8; color:var(--muted); }
+    .source-grid strong { display:block; color:var(--ink); font-size:13px; }
+    .file { font:11px/1.8 ui-monospace,SFMono-Regular,Consolas,monospace; overflow-wrap:anywhere; }
+    footer { padding-top:24px; display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px; font-size:11px; color:var(--muted); }
+    footer a { color:var(--muted); }
+    :root[data-present="true"] .hero,:root[data-present="true"] .notes,:root[data-present="true"] footer,:root[data-present="true"] .keys { display:none; }
+    :root[data-present="true"] .masthead { margin-bottom:20px; }
+    @media(min-width:1600px) { .page { padding-top:32px; } .hero { padding-top:37px; } }
+    @media(max-width:1090px) {
+      .main-grid { grid-template-columns:minmax(0,1fr); }
+      .inspector { border-left:0; border-top:1px solid var(--line); display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); gap:0 28px; }
+      .step-meta { grid-column:1/-1; }
+      .inspector h2 { grid-column:1; margin-top:14px; }
+      .step-description { grid-column:1; grid-row:3/6; margin-bottom:0; }
+      .handoff { grid-column:2; grid-row:2; margin-top:14px; }
+      .fact { grid-column:2; }
+      .step-result,.back-to-step { grid-column:1/-1; margin-top:14px; }
+    }
+    @media(max-width:700px) {
+      .page { padding:18px 14px 25px; }
+      .brand span:last-child { display:none; }
+      .hero { padding:24px 0 20px; }
+      .tools { gap:6px; }
+      .tools button { padding:6px 8px; font-size:11px; }
+      .route-bar { padding:12px; }
+      .route-switch { width:100%; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); }
+      .route-switch button { padding:7px 5px; font-size:12px; }
+      .route-caption { font-size:11px; }
+      .stages { grid-template-columns:repeat(5,minmax(0,1fr)); }
+      .stage { padding:10px 5px; text-align:center; font-size:10px; line-height:1.5; }
+      .stage span { display:block; margin:0 0 2px; }
+      .diagram-area { padding-inline:4px; }
+      .diagram-hint { font-size:10px; }
+      .desktop-hint { display:none; }
+      .mobile-hint { display:inline; }
+      #architecture { min-width:800px; }
+      .inspector { display:flex; padding:21px 19px; }
+      .inspector h2 { margin-top:15px; }
+      .step-description { margin-bottom:18px; }
+      .handoff { margin-top:0; }
+      .readouts { grid-template-columns:minmax(0,1fr); }
+      .readout { border-right:0; border-bottom:1px solid var(--line); padding:9px 18px; display:flex; align-items:baseline; flex-wrap:wrap; gap:6px 12px; }
+      .readout:last-child { border-bottom:0; }
+      .readout-label { min-width:95px; margin:0; }
+      .readout-value { font-size:12px; }
+      .controls { padding:13px 12px; gap:6px; }
+      .control { min-height:37px; padding:7px 12px; font-size:12px; }
+      .playback { order:2; flex-basis:100%; margin:6px 0 0; }
+      .key-grid,.journey-list,.source-grid { grid-template-columns:minmax(0,1fr); }
+      .key-grid { gap:20px; }
+    }
+    @media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } .edge.active { animation:none; stroke-dasharray:none; } .node rect { transition:none; } }
+    @media print {
+      :root[data-theme] { color-scheme:light; --bg:#fff; --panel:#fff; --soft:#eee; --ink:#182321; --muted:#4e5a56; --line:#bbc5bf; --edge:#a0aaa5; --accent:#146759; --accent-soft:#e6f3ed; }
+      .page { max-width:none; padding:0; }
+      .hero { padding-top:15px; }
+      h1 { font-size:30px; }
+      .tools,.controls,.keys,.back-to-step { display:none; }
+      .workbench { box-shadow:none; }
+      .main-grid { display:block; }
+      .diagram-area { break-inside:avoid; }
+      .inspector { display:block; border-left:0; border-top:1px solid var(--line); }
+      .inspector h2 { margin-top:10px; }
+      .edge.active { animation:none; }
+      #architecture { min-width:0; }
+      details { break-inside:avoid; }
+      .notes { margin-top:15px; }
+      footer { padding-top:15px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="masthead">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="8" fill="none" stroke="currentColor"/><path d="M6 14h3l2-6 4 12 2-6h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        <span>VoiceBridge</span><span>Architecture walkthrough</span>
+      </div>
+      <div class="tools">
+        <button class="small-button" id="theme-toggle" type="button">Light mode</button>
+        <button class="small-button" id="present-toggle" aria-pressed="false" type="button">Presentation mode</button>
+      </div>
+    </header>
+    <section class="hero" aria-labelledby="page-title">
+      <p class="eyebrow">Android + Flask · One connected workflow</p>
+      <h1 id="page-title">From sign-in to saved ideas.</h1>
+      <p><strong>Google proves identity.</strong> <strong>Flask creates the app session.</strong> Then voice becomes a note or a conversation.</p>
+    </section>
+    <section class="workbench" aria-label="Interactive end-to-end workflow" id="walkthrough">
+      <div class="route-bar">
+        <div class="route-switch" role="group" aria-label="Choose a user journey">
+          <button type="button" data-route="chat" aria-pressed="true">Voice → Chat</button>
+          <button type="button" data-route="memo" aria-pressed="false">Voice → Memo</button>
+          <button type="button" data-route="memoChat" aria-pressed="false">Memos → Chat</button>
+        </div>
+        <p class="route-caption">Every journey includes Google sign-in and sign-out.</p>
+      </div>
+      <nav class="stages" aria-label="Jump to a journey stage" id="stages"></nav>
+      <div class="controls">
+        <button type="button" class="control" id="prev-button" aria-label="Previous step">← Back</button>
+        <button type="button" class="control primary" id="next-button">Next →</button>
+        <button type="button" class="control" id="play-button" aria-pressed="false">Play</button>
+        <button type="button" class="control" id="restart-button">Restart</button>
+        <div class="playback"><label class="control-label" for="step-slider">Step</label><input id="step-slider" type="range" min="1" max="19" value="1" aria-label="Go to a workflow step"><output id="step-counter" for="step-slider">1 / 19</output></div>
+      </div>
+      <div class="main-grid">
+        <div class="diagram-area">
+          <div class="diagram-hint">
+            <span><span class="legend-stroke"></span>Bright arrows = current handoff</span>
+            <span class="desktop-hint">Click a component to see its role.</span>
+            <span class="mobile-hint">Swipe the diagram sideways.</span>
+          </div>
+          <figure aria-labelledby="diagram-caption">
+            <div class="diagram-scroll" tabindex="0" aria-label="Architecture diagram. Scroll horizontally on small screens.">
+              <svg id="architecture" viewBox="0 0 1120 570" role="group" aria-labelledby="diagram-title diagram-desc">
+                <title id="diagram-title">The VoiceBridge Android client, Flask proxy, and external services</title>
+                <desc id="diagram-desc">Compose sends events to a ViewModel. Repositories use Retrofit and OkHttp to call Flask. Google sign-in uses Credential Manager directly. Flask verifies identity, creates a session, calls OpenAI and Google Sheets, and stores user-owned data in SQLite. The active arrows change with each step.</desc>
+                <defs>
+                  <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M1 1L9 5L1 9Z" fill="var(--accent)"/></marker>
+                </defs>
+                <g id="region-android"><title>Android app — presentation and data layers</title><rect class="region" x="16" y="16" width="480" height="524" rx="15"/><text class="region-label" x="40" y="48">ANDROID APP</text><text class="region-sub" x="40" y="68">Kotlin · Jetpack Compose · MVVM</text></g>
+                <g id="region-flask"><title>Flask is the backend API proxy and creates the app session</title><rect class="region" x="528" y="16" width="272" height="524" rx="15"/><text class="region-label" x="552" y="48">FLASK PROXY</text><text class="region-sub" x="552" y="68">Creates the app session</text></g>
+                <g id="region-services"><title>External identity, AI, and spreadsheet services</title><rect class="region" x="824" y="16" width="280" height="524" rx="15"/><text class="region-label" x="848" y="48">EXTERNAL SERVICES</text><text class="region-sub" x="848" y="68">Called by the app or Flask</text></g>
+                <g id="connections">
+                  <path id="edge-ui-vm" class="edge" d="M158 160V184" data-from="compose" data-to="vm"><title>UI event down; StateFlow updates up</title></path>
+                  <path id="edge-vm-repo" class="edge" d="M158 248V272" data-from="vm" data-to="repo"><title>ViewModel calls the repository; results return to the ViewModel</title></path>
+                  <path id="edge-repo-retrofit" class="edge" d="M158 336V360" data-from="repo" data-to="retrofit"><title>Repository calls the typed Retrofit API interface</title></path>
+                  <path id="edge-retrofit-http" class="edge" d="M158 424V448" data-from="retrofit" data-to="http"><title>Retrofit builds a request; OkHttp performs transport</title></path>
+                  <path id="edge-http-api" class="edge" d="M276 480H512V128H552" data-from="http" data-to="api"><title>HTTP between OkHttp and Flask; responses travel back</title></path>
+                  <path id="edge-api-service" class="edge" d="M664 160V272" data-from="api" data-to="service"><title>API routes call backend services</title></path>
+                  <path id="edge-service-db" class="edge" d="M664 352V448" data-from="service" data-to="db"><title>Services read and write SQLite through db.py</title></path>
+                  <path id="edge-vm-google" class="edge" d="M276 216H290V128H306" data-from="vm" data-to="googleClient"><title>AuthViewModel asks GoogleSignInClient to launch Credential Manager</title></path>
+                  <path id="edge-client-google" class="edge" d="M480 128H502V80H836V128H852" data-from="googleClient" data-to="google"><title>Google SDK sign-in; the Google ID token returns through the SDK</title></path>
+                  <path id="edge-service-google" class="edge" d="M776 292H810V174H970V160" data-from="service" data-to="google"><title>Flask validates the ID token using Google public keys</title></path>
+                  <path id="edge-repo-session" class="edge" d="M276 304H290V276H306" data-from="repo" data-to="session"><title>AuthRepository saves or clears the Flask session in SessionStore</title></path>
+                  <path id="edge-session-http" class="edge" d="M480 276H488V532H158V512" data-from="session" data-to="http"><title>OkHttp's SessionInterceptor reads the Flask token from SessionStore</title></path>
+                  <path id="edge-vm-recorder" class="edge" d="M276 232H298V424H306" data-from="vm" data-to="recorder"><title>SpeechViewModel controls AudioRecorder and receives the audio file</title></path>
+                  <path id="edge-service-openai" class="edge" d="M776 312H852" data-from="service" data-to="openai"><title>Flask calls OpenAI for transcription or a text response</title></path>
+                  <path id="edge-service-sheet" class="edge" d="M776 332H810V488H852" data-from="service" data-to="sheets"><title>Flask writes user prompt text to Google Sheets</title></path>
+                </g>
+                <g class="node" id="node-compose" data-node="compose" role="button" tabindex="0" aria-label="Explain Jetpack Compose">
+                  <title>Compose — screens and user actions</title><rect x="40" y="96" width="236" height="64" rx="9"/><text class="node-title" x="57" y="125">Compose</text><text class="node-sub" x="57" y="147">Screens + user actions</text>
+                </g>
+                <g class="node" id="node-vm" data-node="vm" role="button" tabindex="0" aria-label="Explain the ViewModel">
+                  <title>ViewModel — coroutines, UiState, and StateFlow</title><rect x="40" y="184" width="236" height="64" rx="9"/><text class="node-title" x="57" y="213">ViewModel</text><text class="node-sub" id="vm-label" x="57" y="235">AuthViewModel</text>
+                </g>
+                <g class="node" id="node-repo" data-node="repo" role="button" tabindex="0" aria-label="Explain the Repository">
+                  <title>Repository — data operations and response validation</title><rect x="40" y="272" width="236" height="64" rx="9"/><text class="node-title" x="57" y="301">Repository</text><text class="node-sub" id="repo-label" x="57" y="323">AuthRepository</text>
+                </g>
+                <g class="node" id="node-retrofit" data-node="retrofit" role="button" tabindex="0" aria-label="Explain Retrofit">
+                  <title>Retrofit — typed API calls and JSON conversion</title><rect x="40" y="360" width="236" height="64" rx="9"/><text class="node-title" x="57" y="389">Retrofit</text><text class="node-sub" x="57" y="411">VoiceBridgeApi interface</text>
+                </g>
+                <g class="node" id="node-http" data-node="http" role="button" tabindex="0" aria-label="Explain OkHttp">
+                  <title>OkHttp — transport and the Bearer header</title><rect x="40" y="448" width="236" height="64" rx="9"/><text class="node-title" x="57" y="477">OkHttp</text><text class="node-sub" x="57" y="499">HTTP + SessionInterceptor</text>
+                </g>
+                <g class="node aux" id="node-googleClient" data-node="googleClient" role="button" tabindex="0" aria-label="Explain GoogleSignInClient">
+                  <title>GoogleSignInClient — invokes Android Credential Manager</title><rect x="306" y="96" width="174" height="64" rx="9"/><text class="node-title" x="321" y="125">Google sign-in</text><text class="node-sub" x="321" y="147">Credential Manager</text>
+                </g>
+                <g class="node aux" id="node-session" data-node="session" role="button" tabindex="0" aria-label="Explain SessionStore">
+                  <title>SessionStore — Flask access token kept in memory</title><rect x="306" y="244" width="174" height="64" rx="9"/><text class="node-title" x="321" y="273">SessionStore</text><text class="node-sub" x="321" y="295">Flask token in memory</text>
+                </g>
+                <g class="node aux" id="node-recorder" data-node="recorder" role="button" tabindex="0" aria-label="Explain AudioRecorder">
+                  <title>AudioRecorder — temporary audio capture on Android</title><rect x="306" y="392" width="174" height="64" rx="9"/><text class="node-title" x="321" y="421">AudioRecorder</text><text class="node-sub" x="321" y="443">Temporary .m4a audio</text>
+                </g>
+                <g class="node" id="node-api" data-node="api" role="button" tabindex="0" aria-label="Explain the Flask API routes">
+                  <title>Flask API — route, authentication, validation, and HTTP response</title><rect x="552" y="96" width="224" height="64" rx="9"/><text class="node-title" x="569" y="125">Flask API</text><text class="node-sub" id="api-label" x="569" y="147">Login challenge</text>
+                </g>
+                <g class="node" id="node-service" data-node="service" role="button" tabindex="0" aria-label="Explain Flask services">
+                  <title>Services — authentication, STT, chat, memo, and Sheets logic</title><rect x="552" y="272" width="224" height="80" rx="9"/><text class="node-title" x="569" y="305">Services</text><text class="node-sub" id="service-label" x="569" y="331">auth_service.py</text>
+                </g>
+                <g class="node" id="node-db" data-node="db" role="button" tabindex="0" aria-label="Explain db.py and SQLite">
+                  <title>SQLite — persistence through db.py</title><rect x="552" y="448" width="224" height="80" rx="9"/><text class="node-title" x="569" y="481">SQLite</text><text class="node-sub" id="db-label" x="569" y="507">Via db.py</text>
+                </g>
+                <g class="node" id="node-google" data-node="google" role="button" tabindex="0" aria-label="Explain Google's identity role">
+                  <title>Google proves identity by issuing a signed Google ID token</title><rect x="852" y="96" width="236" height="64" rx="9"/><text class="node-title" x="869" y="125">Google</text><text class="node-sub" x="869" y="147">Proves identity</text>
+                </g>
+                <g class="node" id="node-openai" data-node="openai" role="button" tabindex="0" aria-label="Explain the OpenAI calls">
+                  <title>OpenAI — audio transcription and Responses API</title><rect x="852" y="272" width="236" height="80" rx="9"/><text class="node-title" x="869" y="305">OpenAI</text><text class="node-sub" id="openai-label" x="869" y="331">Speech or text generation</text>
+                </g>
+                <g class="node" id="node-sheets" data-node="sheets" role="button" tabindex="0" aria-label="Explain Google Sheets storage">
+                  <title>Google Sheets — a log of user prompts, written by Flask</title><rect x="852" y="448" width="236" height="80" rx="9"/><text class="node-title" x="869" y="481">Google Sheets</text><text class="node-sub" x="869" y="507">User prompt log</text>
+                </g>
+                <text class="edge-label" x="306" y="520">Flask API calls use HTTP</text>
+              </svg>
+            </div>
+            <figcaption id="diagram-caption">One map for the whole journey. Google sign-in uses the Google SDK; app API calls travel through Retrofit and OkHttp to Flask.</figcaption>
+          </figure>
+        </div>
+        <aside class="inspector" id="inspector" aria-label="Current step explanation"></aside>
+      </div>
+      <div class="readouts" aria-label="State after the current step">
+        <div class="readout"><span class="readout-label">Identity</span><span class="readout-value" id="identity-state">Not checked</span></div>
+        <div class="readout"><span class="readout-label">App session</span><span class="readout-value" id="session-state">Not created</span></div>
+        <div class="readout"><span class="readout-label">Saved data</span><span class="readout-value" id="storage-state">No app data yet</span></div>
+      </div>
+    </section>
+    <div class="keys"><span><kbd>←</kbd> <kbd>→</kbd> step through · <kbd>Space</kbd> play / pause</span><span>Start with Next. Click a stage to jump ahead.</span></div>
+    <div class="notes">
+      <details id="token-guide">
+        <summary>Three things to remember about identity and data</summary>
+        <div class="key-grid">
+          <article id="google-token-key"><h3>Google ID token → identity</h3><p>Google signs this proof of identity. Flask verifies its signature, audience, expiry, and nonce before accepting the login. The nonce is a one-use login check, valid for five minutes.</p></article>
+          <article id="flask-token-key"><h3>Flask token → app access</h3><p>Flask issues its own opaque session token. Android keeps it in SessionStore; OkHttp adds it as an Authorization: Bearer header on protected app requests. SQLite stores a hash. The default session lasts 24 hours or until logout.</p></article>
+          <article id="ownership-key"><h3>user_id → lasting history</h3><p>Chats and memos belong to a stable user_id. A later login creates a new session but resolves the same user. SQLite keeps chat messages and notes; Google Sheets logs user prompt text. Sheet writes use Flask's service account credentials.</p></article>
+        </div>
+      </details>
+      <details id="all-steps">
+        <summary>See the full journey · <span id="journey-name">Voice → Chat</span></summary>
+        <ol class="journey-list" id="journey-list"></ol>
+      </details>
+      <details id="source-guide">
+        <summary>Implementation map · verified against the project</summary>
+        <div class="source-grid">
+          <p><strong>Android UI and state</strong><span class="file">ui/auth/ · ui/home/ · ui/chat/ · ui/memo/ · ui/speech/</span><br>Screens render UiState. ViewModels run coroutines and expose StateFlow.</p>
+          <p><strong>Android data and transport</strong><span class="file">data/repository/ · data/remote/VoiceBridgeApi.kt<br>RetrofitClient.kt · SessionInterceptor.kt<br>data/session/SessionStore.kt · data/audio/AudioRecorder.kt</span></p>
+          <p><strong>Google sign-in</strong><span class="file">auth/GoogleSignInClient.kt<br>api/auth.py · services/auth_service.py<br>services/session_service.py · api/sessions.py</span></p>
+          <p><strong>Speech, chat, memo, and persistence</strong><span class="file">api/transcribe.py · api/chat.py · api/memos.py<br>services/stt_service.py · services/chat_service.py<br>services/memo_service.py · services/sheets_service.py · db.py</span></p>
+        </div>
+      </details>
+    </div>
+    <footer><span>VoiceBridge · English presentation edition · Based on the current implementation</span><span>Illustrative workflow · Works offline · No live API requests</span></footer>
+    <noscript><p>Enable JavaScript to use the step controls. The diagram above shows the complete architecture.</p></noscript>
+  </main>
+  <script>
+    (function () {
+      "use strict";
+      var $ = function (id) { return document.getElementById(id); };
+      var escape = function (value) { return String(value).replace(/[&<>"']/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
+      var forward = ["ui-vm","vm-repo","repo-retrofit","retrofit-http","http-api"];
+      var backward = ["~http-api","~retrofit-http","~repo-retrofit","~vm-repo","~ui-vm"];
+      var protectedForward = forward.concat(["session-http"]);
+      var mode = "chat", index = 0, timer = null, inspected = null;
+      var labels = {chat:"Voice → Chat",memo:"Voice → Memo",memoChat:"Memos → Chat"};
+      function step(phase,title,description,handoff,edges,options) {
+        return Object.assign({phase:phase,title:title,description:description,handoff:handoff,edges:edges,
+          vm:"AuthViewModel",repo:"AuthRepository",service:"auth_service.py",api:"Google sign-in",db:"Login checks + sessions",
+          payload:"",endpoint:"",result:"",state:{}},options || {});
+      }
+      var login = [
+        step(0,"Start Google sign-in","The user taps Sign in with Google. Compose calls AuthViewModel, which asks AuthRepository for a login challenge. Retrofit and OkHttp send the first Flask request.",
+          "Compose → ViewModel → Repository → Retrofit → OkHttp → Flask",forward.concat(["api-service","service-db"]),
+          {endpoint:"POST /auth/google/challenge",api:"Login challenge",payload:"Public request · no Bearer token yet",db:"Nonce hash + 5-minute expiry",result:"Flask creates a one-use nonce for this login attempt.",state:{storage:"Login challenge only"}}),
+        step(0,"Receive the login challenge","Flask returns the Web client ID and nonce. The response travels back through OkHttp and Retrofit to AuthRepository, then AuthViewModel.",
+          "Flask → OkHttp → Retrofit → Repository → ViewModel",backward.slice(0,-1),
+          {endpoint:"201 · client_id + nonce",api:"Return the challenge",payload:"Web client ID + one-time nonce",result:"The nonce links the upcoming Google sign-in to this attempt."}),
+        step(0,"Let Google handle sign-in","AuthViewModel asks GoogleSignInClient to open Credential Manager. The Google SDK handles the account chooser and sends the Web client ID and the exact Flask nonce.",
+          "AuthViewModel → GoogleSignInClient → Google",["vm-google","client-google"],
+          {payload:"Web client ID + nonce",endpoint:"Google SDK · Credential Manager",result:"Google handles the user's account choice.",state:{identity:"Google sign-in in progress"}}),
+        step(0,"Google proves identity","Google returns a signed Google ID token through Credential Manager. GoogleSignInClient gives it back to AuthViewModel. Flask still needs to verify this proof.",
+          "Google → GoogleSignInClient → AuthViewModel",["~client-google","~vm-google"],
+          {payload:"Google ID token",endpoint:"Google SDK result",result:"This is identity proof; the Flask app session has not been created.",state:{identity:"Google ID token received"}}),
+        step(0,"Send the proof to Flask","AuthViewModel passes the ID token and nonce to AuthRepository. Retrofit builds the login request, and OkHttp sends it to Flask.",
+          "ViewModel → Repository → Retrofit → OkHttp → Flask",forward.slice(1),
+          {endpoint:"POST /auth/google",api:"Verify the login",payload:"Google ID token + original nonce",result:"The login endpoint receives the Google proof and challenge together."}),
+        step(0,"Flask creates the app session","Flask validates the token using Google public keys and checks its audience, issuer, expiry, and nonce. It consumes the one-use challenge, finds or creates the user, and saves a new session.",
+          "Flask API → auth/session services → db.py → SQLite",["api-service","service-google","service-db"],
+          {payload:"Stable user_id + new session_id + token hash",db:"users + api_sessions",endpoint:"Verify identity → create session",result:"Google proves identity. Flask decides app access and creates the session.",state:{identity:"Verified by Flask",session:"Created by Flask",storage:"User + session token hash"}}),
+        step(0,"Keep the Flask token in the app","Flask returns its own access_token and user profile. AuthRepository saves them in SessionStore. AuthViewModel observes the user state, and Compose shows the signed-in home screen.",
+          "Flask → OkHttp → Retrofit → AuthRepository → SessionStore → ViewModel → Compose",backward.concat(["repo-session"]),
+          {nodes:["session"],payload:"Flask access_token + user profile",endpoint:"201 · app login successful",api:"Return the app session",db:"users + api_sessions",result:"SessionStore keeps the Flask token in memory for app API calls.",state:{session:"Active · token in SessionStore"}})
+      ];
+      var voice = [
+        step(1,"Record a short voice message","The user taps Record speech and grants microphone permission if needed. SpeechViewModel controls AudioRecorder. The user stops recording when finished.",
+          "Compose → SpeechViewModel → AudioRecorder",["ui-vm","vm-recorder"],
+          {vm:"SpeechViewModel",repo:"SpeechRepository",service:"stt_service.py",api:"Ready for audio",payload:"Temporary .m4a recording",endpoint:"On-device microphone capture",result:"The audio is ready to upload. Typing can start directly in the draft."}),
+        step(1,"Upload audio with the app token","SpeechRepository passes the audio to the multipart Retrofit endpoint. OkHttp's SessionInterceptor reads SessionStore and adds the Flask Bearer token. Flask validates the session before accepting the upload.",
+          "AudioRecorder → ViewModel → Repository → Retrofit → OkHttp → Flask",["~vm-recorder"].concat(protectedForward.slice(1)),
+          {vm:"SpeechViewModel",repo:"SpeechRepository",service:"stt_service.py",api:"POST /transcribe",payload:"Audio file + Authorization: Bearer <Flask token>",endpoint:"POST /transcribe · multipart upload",result:"Protected app requests use the Flask session token."}),
+        step(1,"Turn speech into text","The Flask STT service sends the audio file to OpenAI's Audio Transcriptions API using the backend's API key. OpenAI transcribes the user's original speech.",
+          "Flask API → STT service → OpenAI",["api-service","service-openai"],
+          {vm:"SpeechViewModel",repo:"SpeechRepository",service:"stt_service.py",api:"POST /transcribe",openai:"Audio Transcriptions API",payload:"Audio file → recognized text",endpoint:"OpenAI · /v1/audio/transcriptions",result:"The Android app reaches OpenAI through Flask."}),
+        step(1,"Review the recognized words","The transcription returns through Flask and the Android data layers. SpeechViewModel publishes a Review state. Compose shows editable text; Use text puts the reviewed words into the Chat or Memo draft.",
+          "OpenAI → Flask → OkHttp → Retrofit → Repository → ViewModel → Compose",["~service-openai","~api-service"].concat(backward),
+          {vm:"SpeechViewModel",repo:"SpeechRepository",service:"stt_service.py",api:"Return transcript",openai:"Recognized text",payload:"Editable transcription → draft text",endpoint:"200 · text",result:"The user still chooses Send for Chat, or confirms Save for Memo."})
+      ];
+      var chat = [
+        step(2,"Send a question or translation request","The user presses Send. ChatViewModel calls ChatRepository with the reviewed text and, when continuing a chat, its conversation_id. Retrofit builds the request; OkHttp adds the Flask token.",
+          "Compose → ChatViewModel → ChatRepository → Retrofit → OkHttp → Flask",protectedForward,
+          {vm:"ChatViewModel",repo:"ChatRepository",service:"chat_service.py",api:"POST /chat",payload:"message + optional conversation_id + Flask Bearer token",endpoint:"POST /chat",result:"Typing and reviewed speech use the same chat endpoint."}),
+        step(2,"Build context and generate a reply","Flask's chat service uses prior SQLite messages when a conversation_id is supplied. It sends the text and context to OpenAI's Responses API. Translation requests use this same text workflow.",
+          "Flask API → Chat service → SQLite context → OpenAI",["api-service","service-db","service-openai"],
+          {vm:"ChatViewModel",repo:"ChatRepository",service:"chat_service.py",api:"POST /chat",db:"Prior chat messages, if any",openai:"Responses API",payload:"User text + conversation context",endpoint:"OpenAI · /v1/responses",result:"A new chat starts fresh; an existing chat uses its stored context."}),
+        step(2,"Save both sides of the chat","OpenAI returns a reply. Flask saves the user message and assistant reply together in SQLite, under the user's conversation. The first successful turn creates a conversation_id.",
+          "OpenAI → Chat service → db.py → SQLite",["~service-openai","service-db"],
+          {vm:"ChatViewModel",repo:"ChatRepository",service:"chat_service.py",api:"Complete the chat",db:"conversations + messages",openai:"Assistant reply",payload:"User prompt + AI reply",endpoint:"SQLite · commit the chat turn",result:"SQLite provides the saved conversation history.",state:{storage:"Chat: user message + AI reply"}}),
+        step(2,"Log the user's prompt in Sheets","Flask calls the shared Sheets service and appends the user prompt with a timestamp, session ID, and mode=chat. Sheets authentication uses the backend service account.",
+          "Flask → Sheets service → Google Sheets",["api-service","service-sheet"],
+          {vm:"ChatViewModel",repo:"ChatRepository",service:"sheets_service.py",api:"Copy the prompt",db:"Chat already saved",payload:"Timestamp · SessionID · chat · Prompt",endpoint:"Google Sheets · append one row",result:"If the Sheet copy fails, the completed chat reply is still returned.",state:{storage:"Chat in SQLite · prompt in Sheets"}}),
+        step(2,"Show the answer in Compose","Flask returns the reply, conversation_id, saved messages, and Sheet status. Retrofit parses the response. ChatRepository validates it; ChatViewModel updates UiState through StateFlow, and Compose redraws.",
+          "Flask → OkHttp → Retrofit → ChatRepository → ChatViewModel → Compose",backward,
+          {vm:"ChatViewModel",repo:"ChatRepository",service:"chat_service.py",api:"Return the reply",db:"Saved chat",payload:"AI reply + conversation_id + Sheet copy status",endpoint:"200 · chat result",result:"The user sees the answer or translated text."}),
+        step(3,"Continue the same conversation","The user opens History and chooses a chat. ChatRepository loads that user's saved conversations and messages. The next Send includes the chosen conversation_id, so Flask can reuse the earlier context.",
+          "Compose → ViewModel → Repository → HTTP → Flask → SQLite",protectedForward.concat(["api-service","service-db"]),
+          {vm:"ChatViewModel",repo:"ChatRepository",service:"chat_service.py",api:"Conversation history",db:"User-owned conversations",payload:"Chosen conversation_id",endpoint:"GET /conversations → GET /conversations/{id}/messages",result:"The app tracks conversation_id; the user simply selects a chat."})
+      ];
+      var memo = [
+        step(2,"Confirm and save the note","The user reviews the Memo draft and confirms Save. MemoViewModel calls MemoRepository; Retrofit builds the request and OkHttp attaches the Flask token.",
+          "Compose → MemoViewModel → MemoRepository → Retrofit → OkHttp → Flask",protectedForward,
+          {vm:"MemoViewModel",repo:"MemoRepository",service:"memo_service.py",api:"POST /memos",payload:"prompt + request_id + Flask Bearer token",endpoint:"POST /memos",result:"A request ID makes retrying the same save safe from duplicate inserts."}),
+        step(2,"Save the Memo in SQLite first","Flask resolves the user from the session. The Memo service saves the note with its id, user_id, text, and creation time. This is the persistent note shown in the app.",
+          "Flask API → Memo service → db.py → SQLite",["api-service","service-db"],
+          {vm:"MemoViewModel",repo:"MemoRepository",service:"memo_service.py",api:"Save the memo",db:"memos · owned by user_id",payload:"id · user_id · prompt · created_at",endpoint:"SQLite · save the memo",result:"The note belongs to the signed-in Google user.",state:{storage:"Memo saved in SQLite"}}),
+        step(2,"Copy the note text to Sheets","After the SQLite save, Flask appends the text to Google Sheets with mode=memo. It records whether the Sheet copy succeeded.",
+          "Memo service → Sheets service → Google Sheets",["service-sheet"],
+          {vm:"MemoViewModel",repo:"MemoRepository",service:"memo + sheets services",api:"Copy the memo",db:"Memo already saved",payload:"Timestamp · SessionID · memo · Prompt",endpoint:"Google Sheets · append one row",result:"If Sheets is unavailable, the SQLite Memo remains saved.",state:{storage:"Memo in SQLite · copy in Sheets"}}),
+        step(2,"Show the saved note","Flask returns the persisted Memo and Sheet copy status. MemoRepository validates the result, MemoViewModel updates its state, and Compose adds the note to My memos.",
+          "Flask → OkHttp → Retrofit → MemoRepository → MemoViewModel → Compose",backward,
+          {vm:"MemoViewModel",repo:"MemoRepository",service:"memo_service.py",api:"Return the saved memo",db:"Saved memo + copy status",payload:"Memo record + Sheet status",endpoint:"201 · saved memo",result:"The user can immediately see the saved text in the app."}),
+        step(3,"Load the user's Memo history","When the Memo screen opens or the user presses Refresh, MemoRepository requests the saved notes. Flask checks the session and queries memos for the current user_id.",
+          "Compose → ViewModel → Repository → HTTP → Flask → SQLite",protectedForward.concat(["api-service","service-db"]),
+          {vm:"MemoViewModel",repo:"MemoRepository",service:"memo_service.py",api:"GET /memos",db:"WHERE user_id = current user",payload:"Flask Bearer token",endpoint:"GET /memos",result:"Each user sees their own saved Memos."}),
+        step(3,"Display the newest notes first","SQLite returns the user's notes ordered by creation time. The response travels back through the data layers. MemoViewModel publishes the list, and Compose shows it under the input area.",
+          "SQLite → Flask → OkHttp → Retrofit → Repository → ViewModel → Compose",["~service-db","~api-service"].concat(backward),
+          {vm:"MemoViewModel",repo:"MemoRepository",service:"memo_service.py",api:"Return memo history",db:"Newest memos first",payload:"List of user-owned Memos",endpoint:"200 · memos",result:"Signing in later resolves the same user_id and restores access to these notes."})
+      ];
+      var memoChat = [
+        step(1,"Load the saved Memos","The user opens Add memos in Chat, or the Memo history screen. MemoViewModel asks MemoRepository for the current user's notes. The request uses the Flask session token.",
+          "Compose → MemoViewModel → MemoRepository → HTTP → Flask → SQLite",protectedForward.concat(["api-service","service-db"]),
+          {vm:"MemoViewModel",repo:"MemoRepository",service:"memo_service.py",api:"GET /memos",db:"User-owned memos",payload:"Flask Bearer token",endpoint:"GET /memos",result:"The selection list comes from Flask's SQLite history.",state:{storage:"Existing user-owned Memos"}}),
+        step(1,"Choose one or several notes","The user's Memo list returns to the screen. Compose shows checkboxes, and selection state records the chosen notes. The user can select one or multiple Memos.",
+          "Flask → Repository → MemoViewModel → Compose",backward,
+          {vm:"MemoViewModel",repo:"MemoRepository",service:"memo_service.py",api:"Return available memos",db:"User-owned memos",payload:"Memo list → selected memo IDs",endpoint:"On-screen selection",result:"Example: select two notes about a Friday design review."}),
+        step(1,"Attach notes to a new Chat draft","Start new chat or Chat with selected memos switches to a fresh Chat draft. ChatViewModel holds the selected Memo references, preserves the unsent question, and exposes Attached memos.",
+          "Compose → ChatViewModel → Compose",["ui-vm"],
+          {vm:"ChatViewModel",repo:"ChatRepository",service:"chat_service.py",api:"No request yet",payload:"Selected Memo references in draft state",endpoint:"Local UI state · no AI call",result:"The user can preview or remove attachments before sending."}),
+        step(1,"Add a question about the notes","The user types a question or uses the shared speech-and-review flow. Compose sends draft edits to ChatViewModel. Selecting notes alone does not send a message.",
+          "Compose → ChatViewModel",["ui-vm"],
+          {vm:"ChatViewModel",repo:"ChatRepository",service:"chat_service.py",api:"Ready for a new chat",payload:"Example: What should I prepare for Friday's review?",endpoint:"Draft text",result:"The user controls when the question is sent."}),
+        step(2,"Send the question and Memo IDs","ChatRepository sends the question and selected memo_ids to Flask. OkHttp adds the Flask session token. The client does not supply trusted Memo contents.",
+          "Compose → ChatViewModel → ChatRepository → Retrofit → OkHttp → Flask",protectedForward,
+          {vm:"ChatViewModel",repo:"ChatRepository",service:"chat_service.py",api:"POST /chat",payload:"message + memo_ids + Flask Bearer token",endpoint:"POST /chat · new conversation",result:"Memo attachments are added when starting a new chat."}),
+        step(2,"Resolve the notes for this user","Flask checks that every selected Memo belongs to the current user_id, then reads its text from SQLite. Missing or other-user Memo IDs are rejected before any model call.",
+          "Flask API → Chat service → db.py → SQLite",["api-service","service-db"],
+          {vm:"ChatViewModel",repo:"ChatRepository",service:"chat_service.py",api:"Validate memo ownership",db:"memos · current user only",payload:"Selected IDs → server-owned note records",endpoint:"SQLite · resolve memo_ids",result:"Flask supplies the actual reference material."}),
+        step(2,"Answer using the selected notes","Flask includes the selected Memo text as user reference material in the Responses API request, together with the question. The notes provide context for the answer.",
+          "Flask Chat service → OpenAI",["service-openai"],
+          {vm:"ChatViewModel",repo:"ChatRepository",service:"chat_service.py",api:"Generate the answer",openai:"Responses API + memo context",db:"Selected memo text",payload:"Question + reference notes",endpoint:"OpenAI · /v1/responses",result:"The response can discuss, summarize, or translate the selected notes."}),
+        step(2,"Save the chat and Memo snapshots","Flask saves the question, AI reply, and copies of the selected Memo contents in one SQLite transaction. These snapshots belong to this conversation.",
+          "OpenAI → Chat service → db.py → SQLite",["~service-openai","service-db"],
+          {vm:"ChatViewModel",repo:"ChatRepository",service:"chat_service.py",api:"Save the conversation",openai:"Assistant reply",db:"Chat + memo snapshots",payload:"messages + conversation_memos",endpoint:"SQLite · commit chat and snapshots",result:"Reopening the conversation keeps the exact notes used at the start.",state:{storage:"Chat + Memo snapshots in SQLite"}}),
+        step(2,"Log the new question in Sheets","Flask appends the user's new question with mode=chat. Attached notes remain in the conversation snapshots and are not duplicated into the Sheet prompt.",
+          "Flask → Sheets service → Google Sheets",["api-service","service-sheet"],
+          {vm:"ChatViewModel",repo:"ChatRepository",service:"sheets_service.py",api:"Copy the question",db:"Chat + memo snapshots",payload:"The new user prompt only · mode=chat",endpoint:"Google Sheets · append one row",result:"SQLite stores the conversation context; Sheets logs the user prompt.",state:{storage:"Chat + snapshots · question in Sheets"}}),
+        step(2,"Display the answer and attachments","Flask returns the reply, conversation_id, saved messages, and Memo context. ChatViewModel updates UiState. Compose shows the answer and Attached memos count.",
+          "Flask → OkHttp → Retrofit → ChatRepository → ChatViewModel → Compose",backward,
+          {vm:"ChatViewModel",repo:"ChatRepository",service:"chat_service.py",api:"Return memo-based chat",db:"Saved chat + context",payload:"Reply + conversation_id + memo_context + Sheet status",endpoint:"200 · chat result",result:"Follow-up messages send the conversation_id; Flask reloads the saved snapshots."}),
+        step(3,"Reopen the same memo-based chat","The user selects the conversation from History. Flask returns its messages and saved Memo snapshots. The next question continues with the same context.",
+          "Compose → Repository → Flask → SQLite → saved context",protectedForward.concat(["api-service","service-db"]),
+          {vm:"ChatViewModel",repo:"ChatRepository",service:"chat_service.py",api:"Load conversation history",db:"Messages + memo snapshots",payload:"Chosen conversation_id",endpoint:"GET /conversations/{id}/messages",result:"The user selects a chat; the app manages its conversation_id."})
+      ];
+      var signOut = [
+        step(4,"Sign out of VoiceBridge","The user presses Sign out. AuthRepository calls the protected logout endpoint. Flask validates the token and expires that app session in SQLite.",
+          "Compose → AuthViewModel → AuthRepository → HTTP → Flask → SQLite",protectedForward.concat(["api-service","service-db"]),
+          {service:"session_service.py",api:"POST /auth/logout",db:"Expire current api_session",payload:"Current Flask Bearer token",endpoint:"POST /auth/logout",result:"The old Flask token can no longer access protected app APIs.",state:{session:"Revoked by Flask"}}),
+        step(4,"Clear app state and return to login","After Flask confirms logout, AuthRepository clears SessionStore. The app clears its workspace and Credential Manager's app credential state. Compose returns to the sign-in screen.",
+          "Flask → AuthRepository → SessionStore → AuthViewModel → Compose",backward.concat(["repo-session","vm-google"]),
+          {service:"session_service.py",api:"Logout complete",db:"Saved history remains",payload:"Clear the app token, user state, and in-memory workspace",endpoint:"200 · Logged out",result:"The Google account stays on the device. Saved chats and Memos remain linked to user_id.",state:{identity:"Google account stays on device",session:"Signed out · local token cleared"}})
+      ];
+      var flows = {chat:login.concat(voice,chat,signOut),memo:login.concat(voice,memo,signOut),memoChat:login.concat(memoChat,signOut)};
+      var roles = {
+        compose:{name:"Compose",role:"The presentation layer",text:"Screens display state and turn taps, text edits, microphone actions, and selections into ViewModel calls. Screens observe StateFlow and redraw when UiState changes.",data:"Login screen · Chat screen · Memo screen · speech review dialog",files:"ui/auth/AuthScreen.kt · ui/home/HomeScreen.kt · ui/chat/ChatScreen.kt · ui/memo/MemoScreen.kt"},
+        vm:{name:"ViewModel",role:"State and asynchronous work",text:"Auth, Chat, Memo, and Speech each have a ViewModel. Coroutines wait for data without blocking the UI. The ViewModel exposes UiState through StateFlow for Compose to observe.",data:"User event → coroutine → repository result → UiState",files:"AuthViewModel.kt · ChatViewModel.kt · MemoViewModel.kt · SpeechViewModel.kt"},
+        repo:{name:"Repository",role:"The app's data operations",text:"Repositories expose operations such as sign in, transcribe, send a message, save a note, or load history. They call the API interface, validate responses, and return data or errors to ViewModels.",data:"AuthRepository · SpeechRepository · ChatRepository · MemoRepository",files:"data/repository/"},
+        retrofit:{name:"Retrofit",role:"Typed API requests and response conversion",text:"Retrofit creates an implementation of the Kotlin VoiceBridgeApi interface using a dynamic proxy. Endpoint annotations define requests; Gson converts JSON responses into Kotlin data classes. OkHttp performs the HTTP transport.",data:"Kotlin API method ↔ HTTP request / JSON response",files:"data/remote/VoiceBridgeApi.kt · ApiModels.kt · RetrofitClient.kt"},
+        http:{name:"OkHttp",role:"HTTP transport and session headers",text:"OkHttp sends requests to Flask and receives responses. SessionInterceptor reads the Flask token from SessionStore and adds Authorization: Bearer on protected backend routes. A 401 clears the matching local session.",data:"Public login calls: no Bearer token. Protected app calls: Flask token.",files:"data/remote/RetrofitClient.kt · SessionInterceptor.kt"},
+        googleClient:{name:"GoogleSignInClient",role:"The Android Google sign-in bridge",text:"AuthViewModel invokes this helper with an Activity and the Flask challenge. It uses Credential Manager, the Web client ID, and the nonce to obtain a Google ID token. This Google SDK interaction sits outside the Retrofit app API path.",data:"Google ID token → AuthViewModel → AuthRepository → Flask",files:"auth/GoogleSignInClient.kt"},
+        session:{name:"SessionStore",role:"The current app session in memory",text:"AuthRepository saves the Flask token, expiration time, and user profile here. OkHttp's interceptor reads it for protected app requests. Sign-out clears it. This implementation does not persist the token across a full app process restart.",data:"Opaque Flask access_token + expiry + current user",files:"data/session/SessionStore.kt"},
+        recorder:{name:"AudioRecorder",role:"Microphone capture on Android",text:"SpeechViewModel starts and stops the recorder after microphone permission is granted. It produces a temporary .m4a audio file for SpeechRepository to upload. SpeechViewModel deletes the temporary file after the transcription attempt.",data:"Microphone → temporary audio file → SpeechRepository",files:"data/audio/AudioRecorder.kt · ui/speech/SpeechViewModel.kt"},
+        api:{name:"Flask API",role:"The backend proxy boundary",text:"Routes parse requests, validate input, require a valid Flask session for protected operations, and call services. They turn the result into an HTTP response. The OpenAI key and service account credentials stay on the backend.",data:"Public: login challenge / Google login. Protected: STT / Chat / Memo / history / logout.",files:"api/auth.py · sessions.py · transcribe.py · chat.py · memos.py"},
+        service:{name:"Flask services",role:"Application logic and external API calls",text:"Services verify Google identity, issue app sessions, transcribe audio, generate replies, persist Memos, and call Google Sheets. Authentication and Chat/Memo persistence use db.py for SQLite access.",data:"auth · session · STT · chat · memo · sheets",files:"services/auth_service.py · session_service.py · stt_service.py · chat_service.py · memo_service.py · sheets_service.py"},
+        db:{name:"db.py + SQLite",role:"Persistent data and ownership",text:"db.py manages SQL queries, connections, and transactions. SQLite stores users, hashed sessions, chat conversations, user/AI messages, Memos, and conversation Memo snapshots. Data access is checked against the session's user_id.",data:"user_id identifies the owner; conversation_id identifies one chat; session_id identifies one login session.",files:"db.py · instance/voicebridge.sqlite3"},
+        google:{name:"Google",role:"Proves the user's identity",text:"Google handles account sign-in and issues a signed ID token. Flask checks that token and the one-use nonce before creating its own app session. Google sign-in and the backend Sheets service account serve different purposes.",data:"Google ID token: identity proof. Flask token: app access.",files:"auth/GoogleSignInClient.kt · services/auth_service.py"},
+        openai:{name:"OpenAI",role:"Speech and text generation",text:"Flask sends audio to the Audio Transcriptions API for speech-to-text. It sends text plus optional chat/Memo context to the Responses API for chat or translation. OpenAI credentials are loaded by Flask.",data:"Audio → original words. Text + context → answer or translation.",files:"services/stt_service.py · services/chat_service.py"},
+        sheets:{name:"Google Sheets",role:"A log of user prompt text",text:"Flask uses its service account to append Timestamp, SessionID, Mode, and Prompt. Both Chat and Memo can write here. AI replies and conversation context are kept in SQLite, while Sheets records the user's submitted text.",data:"Modes: chat or memo · prompt text only",files:"services/sheets_service.py · api/chat.py · services/memo_service.py"}
+      };
+      function currentFlow() { return flows[mode]; }
+      function stop() { if (timer !== null) window.clearInterval(timer); timer = null; $("play-button").textContent="Play"; $("play-button").setAttribute("aria-pressed","false"); }
+      function stateAt() {
+        var state={identity:"Not checked",session:"Not created",storage:"No app data yet"};
+        currentFlow().slice(0,index+1).forEach(function(s) { Object.assign(state,s.state); });
+        return state;
+      }
+      function renderInspector() {
+        var s=currentFlow()[index], target=$("inspector");
+        if (inspected) {
+          var r=roles[inspected];
+          target.innerHTML='<div class="step-meta"><span>Component role</span><span>Click to explore</span></div><h2>'+escape(r.name)+'</h2><p class="step-description">'+escape(r.text)+'</p><p class="handoff">'+escape(r.role)+'</p><div class="fact"><span class="fact-label">Remember</span><p class="fact-value">'+escape(r.data)+'</p></div><div class="fact"><span class="fact-label">Implementation</span><p class="fact-value file">'+escape(r.files)+'</p></div><button class="small-button back-to-step" id="back-to-step">← Return to current step</button>';
+          $("back-to-step").addEventListener("click",function(){ inspected=null; render(); });
+        } else {
+          target.innerHTML='<div class="step-meta"><span>Step '+String(index+1).padStart(2,"0")+' / '+currentFlow().length+'</span><span>'+escape(stageNames()[s.phase])+'</span></div><h2 id="step-title" aria-live="polite">'+escape(s.title)+'</h2><p class="step-description">'+escape(s.description)+'</p><p class="handoff">'+escape(s.handoff)+'</p><div class="fact"><span class="fact-label">Data at this step</span><p class="fact-value">'+escape(s.payload)+'</p></div><div class="fact"><span class="fact-label">Call / action</span><p class="fact-value endpoint">'+escape(s.endpoint)+'</p></div><p class="step-result">'+escape(s.result)+'</p>';
+        }
+      }
+      function stageNames() { return ["Google sign-in",mode==="memoChat"?"Select Memos":"Voice → draft",mode==="memo"?"Save Memo":"Ask & save","History","Sign out"]; }
+      function renderStages() {
+        var phase=currentFlow()[index].phase;
+        $("stages").innerHTML=stageNames().map(function(name,i){return '<button class="stage" type="button" data-phase="'+i+'"'+(i===phase?' aria-current="step"':'')+'><span>0'+(i+1)+'</span>'+escape(name)+'</button>';}).join("");
+        $("stages").querySelectorAll("button").forEach(function(button){button.addEventListener("click",function(){ go(currentFlow().findIndex(function(s){return s.phase===Number(button.dataset.phase);})); });});
+      }
+      function renderDiagram() {
+        var s=currentFlow()[index], active=new Set(s.nodes || []);
+        document.querySelectorAll("#connections .edge").forEach(function(path){
+          var id=path.id.slice(5), forwardIndex=s.edges.indexOf(id), reverseIndex=s.edges.indexOf("~"+id);
+          var isActive=forwardIndex!==-1||reverseIndex!==-1, reverse=reverseIndex!==-1;
+          path.classList.toggle("active",isActive); path.classList.toggle("reverse",isActive&&reverse);
+          path.removeAttribute("marker-start"); path.removeAttribute("marker-end");
+          if(isActive){ path.setAttribute(reverse?"marker-start":"marker-end","url(#arrow-active)"); active.add(path.dataset.from); active.add(path.dataset.to); }
+        });
+        document.querySelectorAll(".node").forEach(function(node){ node.classList.toggle("active",active.has(node.dataset.node)); node.classList.toggle("inspected",node.dataset.node===inspected); });
+        $("vm-label").textContent=s.vm; $("repo-label").textContent=s.repo; $("service-label").textContent=s.service;
+        $("api-label").textContent=s.api; $("db-label").textContent=s.db; $("openai-label").textContent=s.openai || "Speech or text generation";
+        $("architecture").setAttribute("aria-label","Step "+(index+1)+": "+s.title+". Click a component for its role.");
+      }
+      function renderList() {
+        $("journey-name").textContent=labels[mode];
+        $("journey-list").innerHTML=currentFlow().map(function(s,i){return '<li><button type="button" data-index="'+i+'"'+(i===index?' aria-current="step"':'')+'><span class="number">'+String(i+1).padStart(2,"0")+'</span><span>'+escape(s.title)+'</span></button></li>';}).join("");
+        $("journey-list").querySelectorAll("button").forEach(function(button){button.addEventListener("click",function(){go(Number(button.dataset.index)); $("walkthrough").scrollIntoView({block:"start"});});});
+      }
+      function render() {
+        var flow=currentFlow(), state=stateAt();
+        renderStages(); renderDiagram(); renderInspector(); renderList();
+        $("identity-state").textContent=state.identity; $("session-state").textContent=state.session; $("storage-state").textContent=state.storage;
+        $("prev-button").disabled=index===0; $("next-button").disabled=index===flow.length-1;
+        $("step-slider").max=String(flow.length); $("step-slider").value=String(index+1);
+        $("step-slider").setAttribute("aria-valuetext","Step "+(index+1)+" of "+flow.length+": "+flow[index].title);
+        $("step-counter").textContent=(index+1)+" / "+flow.length;
+        document.querySelectorAll("[data-route]").forEach(function(button){button.setAttribute("aria-pressed",String(button.dataset.route===mode));});
+      }
+      function go(next,fromPlayback) {
+        if(!fromPlayback) stop();
+        index=Math.max(0,Math.min(currentFlow().length-1,next)); inspected=null; render();
+        if(index===currentFlow().length-1) stop();
+      }
+      function play() {
+        if(timer!==null){stop();return;}
+        if(index===currentFlow().length-1) go(0);
+        inspected=null;render();
+        $("play-button").textContent="Pause";$("play-button").setAttribute("aria-pressed","true");
+        timer=window.setInterval(function(){go(index+1,true);},6500);
+      }
+      $("prev-button").addEventListener("click",function(){go(index-1);});
+      $("next-button").addEventListener("click",function(){go(index+1);});
+      $("restart-button").addEventListener("click",function(){go(0);});
+      $("play-button").addEventListener("click",play);
+      $("step-slider").addEventListener("input",function(event){go(Number(event.target.value)-1);});
+      document.querySelectorAll("[data-route]").forEach(function(button){button.addEventListener("click",function(){
+        var phase=currentFlow()[index].phase, oldIndex=index;stop();mode=button.dataset.route;
+        go(phase===0?Math.min(oldIndex,login.length-1):currentFlow().findIndex(function(s){return s.phase===phase;}));
+      });});
+      document.querySelectorAll("[data-node]").forEach(function(node){
+        function inspect(){stop();inspected=node.dataset.node;renderDiagram();renderInspector();}
+        node.addEventListener("click",inspect);node.addEventListener("keydown",function(event){if(event.key==="Enter"||event.key===" "){event.preventDefault();inspect();}});
+      });
+      $("theme-toggle").addEventListener("click",function(){
+        var light=document.documentElement.dataset.theme!=="light";document.documentElement.dataset.theme=light?"light":"dark";
+        this.textContent=light?"Dark mode":"Light mode";
+      });
+      $("present-toggle").addEventListener("click",function(){
+        var present=document.documentElement.dataset.present!=="true";document.documentElement.dataset.present=String(present);
+        this.textContent=present?"Exit presentation":"Presentation mode";this.setAttribute("aria-pressed",String(present));
+        if(present) window.scrollTo({top:0});
+      });
+      document.addEventListener("keydown",function(event){
+        if(event.defaultPrevented||event.altKey||event.ctrlKey||event.metaKey||/INPUT|TEXTAREA|SELECT/.test(event.target.tagName))return;
+        if(event.key==="ArrowRight"){event.preventDefault();go(index+1);}
+        else if(event.key==="ArrowLeft"){event.preventDefault();go(index-1);}
+        else if(event.code==="Space"&&event.target===document.body){event.preventDefault();play();}
+        else if(event.key==="Escape"&&inspected){inspected=null;render();}
+      });
+      document.addEventListener("visibilitychange",function(){if(document.hidden)stop();});
+      render();
+    }());
+  </script>
+</body>
+</html>

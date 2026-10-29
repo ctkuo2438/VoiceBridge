@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="Simple diagrams of the VoiceBridge Android frontend and Flask backend: Compose, ViewModel, Repository, Retrofit, OkHttp, Google sign-in, and speech input.">
+  <title>VoiceBridge — Android + Flask Workflows</title>
+  <style>
+    :root { color-scheme: dark; --bg:#161718; --soft:#222426; --ink:#ededed; --muted:#b1b4b7; --line:#42464a; --accent:#a9c8f8; --code:#2c2f32; --good:#a5d5b9; }
+    :root[data-theme="light"] { color-scheme:light; --bg:#ffffff; --soft:#f4f5f6; --ink:#191b1d; --muted:#5d646b; --line:#d9dde1; --accent:#285d9f; --code:#eef0f2; --good:#246745; }
+    *,*::before,*::after { box-sizing:border-box; }
+    html { background:var(--bg); scroll-behavior:smooth; scroll-padding-top:24px; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.7 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    h1,h2,h3,p,li,a,code,figcaption,button,summary { overflow-wrap:anywhere; }
+    a { color:var(--accent); text-underline-offset:4px; }
+    button { font:inherit; cursor:pointer; }
+    a:focus-visible,button:focus-visible,summary:focus-visible { outline:3px solid var(--accent); outline-offset:4px; }
+    h1 { margin:14px 0 18px; max-width:900px; font-size:clamp(36px,5.2vw,60px); line-height:1.12; letter-spacing:-.045em; }
+    h2 { margin:0 0 12px; font-size:clamp(25px,3vw,33px); line-height:1.25; letter-spacing:-.03em; }
+    h3 { margin:0 0 7px; font-size:18px; line-height:1.4; }
+    p { margin:0 0 14px; }
+    code { padding:2px 5px; background:var(--code); border-radius:4px; font: .87em/1.65 ui-monospace,SFMono-Regular,Consolas,monospace; }
+    .page { width:min(1180px,100%); margin:0 auto; padding:32px 32px 44px; }
+    .topbar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px; color:var(--muted); font-size:12px; }
+    .tools { display:flex; flex-wrap:wrap; gap:8px; }
+    .tools a,.tools button { display:inline-block; padding:7px 11px; border:1px solid var(--line); border-radius:6px; color:var(--ink); background:var(--bg); text-decoration:none; font-size:12px; }
+    .tools a:hover,.tools button:hover { border-color:var(--ink); }
+    .hero { padding:36px 0 28px; }
+    .eyebrow { margin:0 0 12px; color:var(--muted); font-size:11px; font-weight:650; letter-spacing:.14em; }
+    .lead { max-width:750px; color:var(--muted); font-size:19px; }
+    .status { display:inline-block; padding:3px 9px; margin-top:6px; border:1px solid var(--line); border-radius:5px; color:var(--good); font-size:12px; }
+    nav { display:flex; flex-wrap:wrap; gap:10px 25px; padding:17px 0; border-block:1px solid var(--line); font-size:13px; }
+    nav a { color:var(--muted); text-decoration:none; }
+    nav a:hover { color:var(--ink); }
+    section { padding:38px 0; border-bottom:1px solid var(--line); }
+    .intro { max-width:800px; margin-bottom:24px; color:var(--muted); }
+    .split { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(0,.85fr); align-items:start; gap:30px; }
+    .split>*,.mode-grid>*,.storage-grid>*,.role-grid>* { min-width:0; }
+    figure { margin:0; padding:22px; border:1px solid var(--line); border-radius:10px; background:var(--bg); min-width:0; }
+    figure svg { display:block; width:100%; max-width:530px; height:auto; margin-inline:auto; }
+    figcaption { margin-top:16px; color:var(--muted); font-size:13px; line-height:1.6; }
+    svg text { fill:var(--ink); font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    svg .box { fill:var(--soft); stroke:var(--line); stroke-width:1.6; }
+    svg .main-box { fill:var(--bg); stroke:var(--ink); stroke-width:1.9; }
+    svg .sub { fill:var(--muted); }
+    svg .edge { stroke:var(--ink); stroke-width:1.8; fill:none; }
+    svg .return-edge { stroke:var(--muted); stroke-width:1.7; stroke-dasharray:4 4; fill:none; }
+    svg .arrow-head { fill:var(--ink); }
+    svg .return-head { fill:var(--muted); }
+    svg .lifeline { stroke:var(--line); stroke-width:1.4; stroke-dasharray:5 5; fill:none; }
+    svg .divider-line { stroke:var(--line); stroke-width:1; stroke-dasharray:3 5; }
+    .notes article { margin-bottom:22px; }
+    .notes p { font-size:15px; }
+    .muted { color:var(--muted); }
+    .legend { display:flex; flex-wrap:wrap; justify-content:center; gap:12px 24px; margin-bottom:10px; color:var(--muted); font-size:12px; }
+    .hint { margin:20px 0; padding:15px 17px; border-left:3px solid var(--ink); border-radius:0 6px 6px 0; background:var(--soft); font-size:14px; }
+    .hint p:last-child { margin-bottom:0; }
+    .file { display:block; margin-top:6px; color:var(--muted); font-size:12px; }
+    .file code { padding:0; background:none; }
+    .role-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:22px; }
+    .role-card { padding:16px; border:1px solid var(--line); border-radius:8px; }
+    .role-card h3 { font-size:16px; }
+    .role-card p { margin:0; font-size:14px; }
+    .mode-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; }
+    .mode-grid figure h3 { margin-bottom:18px; font-size:21px; }
+    .mode-grid figcaption { min-height:64px; }
+    .storage-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-top:26px; }
+    .storage-card { padding:18px; border:1px solid var(--line); border-radius:8px; background:var(--soft); }
+    .storage-card h3 { font-size:17px; }
+    .storage-card p { margin-bottom:0; font-size:14px; }
+    .storage-card .location { display:block; margin-bottom:8px; color:var(--muted); font-size:12px; }
+    .sources { margin-top:24px; color:var(--muted); font-size:12px; }
+    .sources summary { width:fit-content; cursor:pointer; }
+    .sources ul { padding-left:20px; line-height:1.8; }
+    .sources li { margin:5px 0; }
+    .sources code { background:none; padding:0; }
+    footer { padding-top:25px; color:var(--muted); font-size:12px; }
+    .next { padding:14px 17px; border:1px dashed var(--line); border-radius:8px; font-size:14px; }
+    @media(max-width:800px) {
+      .split { grid-template-columns:minmax(0,1fr); gap:22px; }
+      .notes { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px 22px; }
+      .notes article { min-width:0; margin-bottom:16px; }
+      .notes .hint { grid-column:1/-1; }
+      .storage-grid { grid-template-columns:minmax(0,1fr); }
+      .mode-grid { grid-template-columns:minmax(0,1fr); }
+      .mode-grid figcaption { min-height:0; }
+    }
+    @media(max-width:480px) {
+      .page { padding:22px 16px 32px; }
+      .hero { padding:30px 0 24px; }
+      .lead { font-size:17px; }
+      section { padding:30px 0; }
+      figure { padding:12px; }
+      .notes,.role-grid { grid-template-columns:minmax(0,1fr); }
+      .notes { gap:0; }
+      .tools { width:100%; }
+    }
+    @media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+    @media print {
+      :root[data-theme] { --bg:#fff; --soft:#f4f5f6; --ink:#191b1d; --muted:#5d646b; --line:#d9dde1; --accent:#285d9f; --code:#eef0f2; --good:#246745; color-scheme:light; }
+      .page { max-width:none; width:100%; padding:0; }
+      .tools,nav { display:none; }
+      .hero { padding-top:0; }
+      h1 { font-size:38px; }
+      section { padding:24px 0; }
+      figure,.storage-card,.notes article,.hint { break-inside:avoid; }
+      .split { grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr); gap:20px; }
+      .notes { display:block; }
+      .mode-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .storage-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <div class="topbar">
+    <span>VOICEBRIDGE / ANDROID + FLASK / UPDATED 29 OCT 2026</span>
+    <div class="tools">
+      <a href="voicebridge-interactive-journey-en.html">Interactive walkthrough</a>
+      <button id="theme-toggle" type="button">Light mode</button>
+      <button id="print-page" type="button">Print / Save PDF</button>
+    </div>
+  </div>
+  <header class="hero">
+    <p class="eyebrow">A SIMPLE VISUAL GUIDE</p>
+    <h1>How the Android app<br>connects to Flask.</h1>
+    <p class="lead">Compose shows the screen. ViewModel manages state. Repository handles data. Retrofit and OkHttp connect Android to Flask.</p>
+    <span class="status">Google sign-in · Speech · Chat · Memo history · Memos → Chat</span>
+  </header>
+  <nav aria-label="Workflow navigation">
+    <a href="#frontend">01 Frontend layers</a>
+    <a href="#sign-in">02 Google sign-in</a>
+    <a href="#voice">03 Shared voice input</a>
+    <a href="#modes">04 Chat and Memo</a>
+    <a href="#memo-chat">05 Memos → Chat</a>
+    <a href="#backend">06 Flask, storage, and logout</a>
+  </nav>
+  <main>
+    <section id="frontend" aria-labelledby="frontend-heading">
+      <p class="eyebrow">01 / FRONTEND LAYERS</p>
+      <h2 id="frontend-heading">The request goes down. The result comes back.</h2>
+      <p class="intro">MVVM means the screen displays state while the ViewModel handles user actions. The data layer connects that ViewModel to Flask.</p>
+      <div class="split">
+        <figure id="frontend-layers-figure">
+          <div class="legend"><span>↓ Solid: action / request</span><span>↑ Dashed: result / state</span></div>
+          <svg viewBox="0 0 500 840" role="img" aria-labelledby="layers-title layers-description">
+<title id="layers-title">From the screen to Flask, and back</title><desc id="layers-description">A UI action passes through ViewModel, Repository, Retrofit and OkHttp to Flask. The response returns through the same layers. The ViewModel publishes UiState through StateFlow and Compose updates the screen.</desc>
+<defs>
+<marker id="layers-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" class="arrow-head"/></marker>
+<marker id="layers-return-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" class="return-head"/></marker>
+</defs>
+<g id="layers-compose"><title>Jetpack Compose: Screens: show state and collect input</title><rect class="box" x="46" y="24" width="408" height="88" rx="9"/><text x="250.0" y="65.0" text-anchor="middle" font-size="22" font-weight="650" class="">Jetpack Compose</text><text x="250.0" y="91.0" text-anchor="middle" font-size="17" font-weight="400" class="sub">Screens: show state and collect input</text></g><g id="layers-down-compose"><title>Action or request travels to the next layer</title><path class="edge" d="M216 112 V153" marker-end="url(#layers-arrow)"/></g><g id="layers-up-compose"><title>The result returns through this layer</title><path class="return-edge" d="M284 158 V117" marker-end="url(#layers-return-arrow)"/></g><g id="layers-viewmodel"><title>ViewModel: Actions, coroutines, and UiState</title><rect class="main-box" x="46" y="158" width="408" height="88" rx="9"/><text x="250.0" y="199.0" text-anchor="middle" font-size="22" font-weight="650" class="">ViewModel</text><text x="250.0" y="225.0" text-anchor="middle" font-size="17" font-weight="400" class="sub">Actions, coroutines, and UiState</text></g><g id="layers-down-viewmodel"><title>Action or request travels to the next layer</title><path class="edge" d="M216 246 V287" marker-end="url(#layers-arrow)"/></g><g id="layers-up-viewmodel"><title>The result returns through this layer</title><path class="return-edge" d="M284 292 V251" marker-end="url(#layers-return-arrow)"/></g><g id="layers-repository"><title>Repository: Load data and validate results</title><rect class="box" x="46" y="292" width="408" height="88" rx="9"/><text x="250.0" y="333.0" text-anchor="middle" font-size="22" font-weight="650" class="">Repository</text><text x="250.0" y="359.0" text-anchor="middle" font-size="17" font-weight="400" class="sub">Load data and validate results</text></g><g id="layers-down-repository"><title>Action or request travels to the next layer</title><path class="edge" d="M216 380 V421" marker-end="url(#layers-arrow)"/></g><g id="layers-up-repository"><title>The result returns through this layer</title><path class="return-edge" d="M284 426 V385" marker-end="url(#layers-return-arrow)"/></g><g id="layers-retrofit"><title>Retrofit: VoiceBridgeApi + JSON conversion</title><rect class="box" x="46" y="426" width="408" height="88" rx="9"/><text x="250.0" y="467.0" text-anchor="middle" font-size="22" font-weight="650" class="">Retrofit</text><text x="250.0" y="493.0" text-anchor="middle" font-size="17" font-weight="400" class="sub">VoiceBridgeApi + JSON conversion</text></g><g id="layers-down-retrofit"><title>Action or request travels to the next layer</title><path class="edge" d="M216 514 V555" marker-end="url(#layers-arrow)"/></g><g id="layers-up-retrofit"><title>The result returns through this layer</title><path class="return-edge" d="M284 560 V519" marker-end="url(#layers-return-arrow)"/></g><g id="layers-okhttp"><title>OkHttp: HTTP + SessionInterceptor</title><rect class="box" x="46" y="560" width="408" height="88" rx="9"/><text x="250.0" y="601.0" text-anchor="middle" font-size="22" font-weight="650" class="">OkHttp</text><text x="250.0" y="627.0" text-anchor="middle" font-size="17" font-weight="400" class="sub">HTTP + SessionInterceptor</text></g><g id="layers-down-okhttp"><title>Action or request travels to the next layer</title><path class="edge" d="M216 648 V725" marker-end="url(#layers-arrow)"/></g><g id="layers-up-okhttp"><title>The result returns through this layer</title><path class="return-edge" d="M284 730 V653" marker-end="url(#layers-return-arrow)"/></g><g id="layers-flask"><title>Flask backend: Verify session and run the feature</title><rect class="main-box" x="46" y="730" width="408" height="88" rx="9"/><text x="250.0" y="771.0" text-anchor="middle" font-size="22" font-weight="650" class="">Flask backend</text><text x="250.0" y="797.0" text-anchor="middle" font-size="17" font-weight="400" class="sub">Verify session and run the feature</text></g><g id="layers-network-boundary"><title>Network boundary between Android and Flask</title><path class="divider-line" d="M20 693 H480"/><text x="24" y="681" text-anchor="start" font-size="14" font-weight="600" class="sub">HTTP boundary</text></g>
+</svg>
+          <figcaption>The UI calls ViewModel functions. ViewModel exposes <code>UiState</code> through <code>StateFlow</code>, and Compose redraws when that state changes.</figcaption>
+        </figure>
+        <div class="notes">
+          <article id="role-compose"><h3>Compose = what the user sees</h3><p>Show the login screen, mode tabs, chat messages, Memo history, selection checkboxes, and recording controls. Send taps and edits to the ViewModel.</p><span class="file"><code>AuthScreen · HomeScreen · ChatScreen · MemoScreen · SpeechInput</code></span></article>
+          <article id="role-viewmodel"><h3>ViewModel = what happens next</h3><p>Keep drafts, loading states, errors, selected Memos, and the current conversation. Start work with coroutines, then publish UiState through StateFlow.</p><span class="file"><code>AuthViewModel · ChatViewModel · MemoViewModel · SpeechViewModel</code></span></article>
+          <article id="role-repository"><h3>Repository = the data operations</h3><p>Expose operations such as sign in, transcribe, send a message, save a Memo, and load history. ChatRepository also sends selected Memo IDs. Validate API results and return useful data or an error.</p><span class="file"><code>AuthRepository · SpeechRepository · ChatRepository · MemoRepository</code></span></article>
+          <article id="role-retrofit"><h3>Retrofit = Kotlin calls to API requests</h3><p><code>VoiceBridgeApi.kt</code> declares endpoints. <code>ApiModels.kt</code> defines request and response shapes. Retrofit creates an implementation of the interface using a dynamic proxy; Gson converts JSON.</p><span class="file"><code>RetrofitClient.kt</code> connects the API interface to OkHttp.</span></article>
+          <article id="role-okhttp"><h3>OkHttp = send and receive HTTP</h3><p>Carry requests over the network and apply timeouts. <code>SessionInterceptor</code> attaches the Flask Bearer token to protected backend requests.</p></article>
+          <div class="hint" id="state-return-note"><strong>The screen does not receive HTTP directly.</strong><p>Flask JSON → OkHttp response → Retrofit models → Repository result → ViewModel updates <code>UiState</code> → Compose refreshes.</p></div>
+        </div>
+      </div>
+      <div class="role-grid" aria-label="Supporting components">
+        <article class="role-card" id="helper-session"><h3>SessionStore</h3><p>A shared helper holding the current Flask token and user <strong>in memory</strong>. The interceptor reads it when sending protected requests.</p></article>
+        <article class="role-card" id="helper-audio"><h3>AudioRecorder</h3><p>A local Android helper that records the microphone. <code>SpeechViewModel</code> controls it; <code>SpeechRepository</code> uploads the finished file.</p></article>
+        <article class="role-card" id="helper-coroutines"><h3>Coroutines</h3><p>Let work wait for network responses while the screen remains responsive. Repository and Retrofit network operations use <code>suspend</code> functions.</p></article>
+        <article class="role-card" id="helper-stateflow"><h3>UiState + StateFlow</h3><p><code>UiState</code> describes the screen now. <code>StateFlow</code> delivers state changes from ViewModel to Compose.</p></article>
+        <article class="role-card" id="helper-google"><h3>GoogleSignInClient</h3><p>AuthViewModel asks this helper to launch Credential Manager. It returns a Google ID token; AuthRepository then exchanges that proof with Flask.</p></article>
+        <article class="role-card" id="helper-home"><h3>HomeRoute + workspace</h3><p>Connect the Chat, Memo, and Speech ViewModels to the signed-in user. Preserve drafts during mode switches and move selected Memos into a new Chat draft.</p></article>
+      </div>
+      <details class="sources"><summary>Where this lives in the project</summary><ul>
+        <li><code>VoiceBridge/android/app/src/main/java/com/zhenting/voicebridge/ui/</code></li>
+        <li><code>…/data/repository/</code>, <code>…/data/remote/</code>, <code>…/data/session/SessionStore.kt</code></li>
+        <li><code>…/data/audio/AudioRecorder.kt</code>; <code>…/data/AppContainer.kt</code> creates and connects the dependencies.</li>
+      </ul></details>
+    </section>
+
+    <section id="sign-in" aria-labelledby="signin-heading">
+      <p class="eyebrow">02 / GOOGLE SIGN-IN</p>
+      <h2 id="signin-heading">Google proves identity. Flask creates the app session.</h2>
+      <p class="intro">The Android app exchanges a Google ID token for its own Flask access token. That Flask token is used for Speech, Chat, and Memo.</p>
+      <div class="split">
+        <figure id="google-signin-figure"><svg viewBox="0 0 520 900" role="img" aria-labelledby="login-title login-description">
+<title id="login-title">Google sign-in creates a separate Flask session</title><desc id="login-description">Android requests a one-use nonce, signs in with Google, exchanges the ID token and nonce for a Flask token, and stores the Flask token in SessionStore. OkHttp adds it to protected app requests.</desc>
+<defs>
+<marker id="login-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" class="arrow-head"/></marker>
+<marker id="login-return-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" class="return-head"/></marker>
+</defs>
+<g id="login-actor-android"><title>Android</title><rect class="box" x="10" y="16" width="100" height="56" rx="9"/><text x="60.0" y="51.0" text-anchor="middle" font-size="21" font-weight="600" class="">Android</text></g><g id="login-actor-google"><title>Google</title><rect class="box" x="210" y="16" width="100" height="56" rx="9"/><text x="260.0" y="51.0" text-anchor="middle" font-size="21" font-weight="600" class="">Google</text></g><g id="login-actor-flask"><title>Flask</title><rect class="main-box" x="410" y="16" width="100" height="56" rx="9"/><text x="460.0" y="51.0" text-anchor="middle" font-size="21" font-weight="600" class="">Flask</text></g><g id="login-lifelines"><title>Android, Google and Flask lifelines</title><path class="lifeline" d="M60 84 V878 M260 84 V878 M460 84 V878"/></g><g id="login-step-challenge"><title>1. Request sign-in challenge</title><path class="edge" d="M60 138 H455" marker-end="url(#login-arrow)"/><text x="260" y="119" text-anchor="middle" font-size="19" font-weight="400" class="">1. Request sign-in challenge</text></g><g id="login-step-nonce"><title>2. Web client ID + nonce</title><path class="edge" d="M460 232 H65" marker-end="url(#login-arrow)"/><text x="260" y="213" text-anchor="middle" font-size="19" font-weight="400" class="">2. Web client ID + nonce</text></g><g id="login-step-google"><title>3. Sign in + nonce</title><path class="edge" d="M60 326 H255" marker-end="url(#login-arrow)"/><text x="160" y="307" text-anchor="middle" font-size="19" font-weight="400" class="">3. Sign in + nonce</text></g><g id="login-step-id-token"><title>4. Google ID token</title><path class="edge" d="M260 420 H65" marker-end="url(#login-arrow)"/><text x="160" y="401" text-anchor="middle" font-size="19" font-weight="400" class="">4. Google ID token</text></g><g id="login-step-exchange"><title>5. POST /auth/google</title><path class="edge" d="M60 514 H455" marker-end="url(#login-arrow)"/><text x="260" y="495" text-anchor="middle" font-size="19" font-weight="400" class="">5. POST /auth/google</text></g><g id="login-step-access-token"><title>7. Flask access_token</title><path class="edge" d="M460 752 H65" marker-end="url(#login-arrow)"/><text x="260" y="733" text-anchor="middle" font-size="19" font-weight="400" class="">7. Flask access_token</text></g><g id="login-step-protected"><title>8. Bearer token → app APIs</title><path class="edge" d="M60 850 H455" marker-end="url(#login-arrow)"/><text x="260" y="831" text-anchor="middle" font-size="19" font-weight="400" class="">8. Bearer token → app APIs</text></g><text x="260" y="545" text-anchor="middle" font-size="17" font-weight="400" class="sub">Google ID token + nonce</text><g id="login-step-verify"><title>Flask verifies the Google token and nonce, then saves the user and app session</title><rect class="main-box" x="270" y="578" width="240" height="116" rx="9"/><text x="390" y="608" text-anchor="middle" font-size="20" font-weight="650" class="">6. Verify + save</text><text x="390" y="639" text-anchor="middle" font-size="18" font-weight="400" class="">users + api_sessions</text><text x="390" y="670" text-anchor="middle" font-size="17" font-weight="400" class="sub">Store token hash</text></g>
+</svg><figcaption><code>AuthViewModel</code> coordinates the flow. The screen / Activity invokes <code>GoogleSignInClient</code>; AuthRepository handles the Flask login calls through Retrofit and OkHttp.</figcaption></figure>
+        <div class="notes">
+          <article id="signin-repository"><h3>Steps 1, 2, 5, 7 · AuthRepository</h3><p>AuthViewModel calls the repository to get the challenge and exchange the Google ID token. The repository uses Retrofit + OkHttp, validates the result, and saves the Flask token and user to <code>SessionStore</code>.</p></article>
+          <article id="signin-google-client"><h3>Steps 3, 4 · GoogleSignInClient</h3><p>Open Google's account chooser with Credential Manager. Include the Web client ID and nonce, then return the Google ID token.</p></article>
+          <article id="signin-server"><h3>Step 6 · Flask</h3><p><code>api/auth.py</code> calls <code>auth_service.py</code> to verify the Google token and nonce. Session logic and <code>db.py</code> save the user and app session.</p></article>
+          <article id="signin-interceptor"><h3>Step 8 · SessionInterceptor</h3><p>OkHttp adds this header to protected Flask requests:</p><p><code>Authorization: Bearer &lt;Flask token&gt;</code></p></article>
+          <div class="hint" id="signin-token-note"><strong>Two tokens, two purposes.</strong><p><strong>Google ID token:</strong> prove who signed in.<br><strong>Flask access token:</strong> use the app APIs.</p><p class="muted">The nonce is a one-use sign-in value, valid for 5 minutes. The Flask session lasts 24 hours by default.</p></div>
+        </div>
+      </div>
+      <details class="sources"><summary>Where this lives in the project</summary><ul>
+        <li>Android: <code>ui/auth/AuthViewModel.kt</code>, <code>ui/auth/AuthScreen.kt</code>, <code>auth/GoogleSignInClient.kt</code></li>
+        <li>Android: <code>data/repository/AuthRepository.kt</code>, <code>data/session/SessionStore.kt</code>, <code>data/remote/SessionInterceptor.kt</code></li>
+        <li>Flask: <code>api/auth.py</code>, <code>services/auth_service.py</code>, <code>services/session_service.py</code>, <code>db.py</code></li>
+      </ul></details>
+    </section>
+
+    <section id="voice" aria-labelledby="voice-heading">
+      <p class="eyebrow">03 / SHARED VOICE INPUT</p>
+      <h2 id="voice-heading">One recording flow feeds either mode.</h2>
+      <p class="intro">Speech recognition produces editable text. The user then decides whether to send a chat message or save a memo.</p>
+      <div class="split">
+        <figure id="speech-input-figure"><svg viewBox="0 0 520 818" role="img" aria-labelledby="speech-title speech-description">
+<title id="speech-title">Both modes share the same speech input</title><desc id="speech-description">Android records an M4A file, uploads it to Flask, and displays the returned transcript. The user edits it and adds it to the selected mode draft. Sending a chat and saving a memo are separate actions.</desc>
+<defs>
+<marker id="speech-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" class="arrow-head"/></marker>
+<marker id="speech-return-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" class="return-head"/></marker>
+</defs>
+<g id="speech-actor-android"><title>Android</title><rect class="box" x="10" y="16" width="100" height="56" rx="9"/><text x="60.0" y="51.0" text-anchor="middle" font-size="21" font-weight="600" class="">Android</text></g><g id="speech-actor-flask"><title>Flask</title><rect class="main-box" x="210" y="16" width="100" height="56" rx="9"/><text x="260.0" y="51.0" text-anchor="middle" font-size="21" font-weight="600" class="">Flask</text></g><g id="speech-actor-openai"><title>OpenAI</title><rect class="box" x="410" y="16" width="100" height="56" rx="9"/><text x="460.0" y="51.0" text-anchor="middle" font-size="21" font-weight="600" class="">OpenAI</text></g><g id="speech-lifelines"><title>Speech request lifelines</title><path class="lifeline" d="M60 84 V800 M260 84 V800 M460 84 V800"/></g><g id="speech-record-locally"><title>Android requests microphone permission and records AAC in a temporary M4A file</title><rect class="box" x="6" y="106" width="238" height="106" rx="9"/><text x="125" y="140" text-anchor="middle" font-size="20" font-weight="650" class="">1. Record speech</text><text x="125" y="170" text-anchor="middle" font-size="18" font-weight="400" class="">AudioRecorder → .m4a</text><text x="125" y="195" text-anchor="middle" font-size="16" font-weight="400" class="sub">Microphone permission</text></g><g id="speech-step-upload"><title>2. Upload audio: POST /transcribe</title><path class="edge" d="M60 290 H255" marker-end="url(#speech-arrow)"/><text x="160" y="271" text-anchor="middle" font-size="19" font-weight="400" class="">2. Upload audio</text><text x="160" y="318" text-anchor="middle" font-size="16" font-weight="400" class="sub">POST /transcribe</text></g><g id="speech-step-transcribe"><title>3. Transcribe: Audio → original words</title><path class="edge" d="M260 390 H455" marker-end="url(#speech-arrow)"/><text x="360" y="371" text-anchor="middle" font-size="19" font-weight="400" class="">3. Transcribe</text><text x="360" y="418" text-anchor="middle" font-size="16" font-weight="400" class="sub">Audio → original words</text></g><g id="speech-step-words"><title>4. Return words: </title><path class="edge" d="M460 490 H265" marker-end="url(#speech-arrow)"/><text x="360" y="471" text-anchor="middle" font-size="19" font-weight="400" class="">4. Return words</text></g><g id="speech-step-json"><title>5. Return text: JSON: {&quot;text&quot;: &quot;…&quot;}</title><path class="edge" d="M260 590 H65" marker-end="url(#speech-arrow)"/><text x="160" y="571" text-anchor="middle" font-size="19" font-weight="400" class="">5. Return text</text><text x="160" y="618" text-anchor="middle" font-size="16" font-weight="400" class="sub">JSON: {&quot;text&quot;: &quot;…&quot;}</text></g><g id="speech-review"><title>SpeechViewModel holds the transcript until the user edits it and chooses Use text</title><rect class="main-box" x="6" y="650" width="238" height="126" rx="9"/><text x="125" y="686" text-anchor="middle" font-size="20" font-weight="650" class="">6. Review and edit</text><text x="125" y="719" text-anchor="middle" font-size="19" font-weight="400" class="">Use text → draft</text><text x="125" y="752" text-anchor="middle" font-size="17" font-weight="400" class="sub">Chat or Memo</text></g>
+</svg><figcaption>The upload is <code>multipart/form-data</code> with one field named <code>file</code>. The OpenAI key stays in Flask.</figcaption></figure>
+        <div class="notes">
+          <article id="speech-start"><h3>Record speech</h3><p><code>SpeechInput</code> asks for microphone permission. <code>SpeechViewModel</code> starts <code>AudioRecorder</code>, which creates a temporary AAC / M4A recording.</p></article>
+          <article id="speech-upload"><h3>Stop and transcribe</h3><p>The ViewModel stops recording and passes the audio file to <code>SpeechRepository</code>. Retrofit and OkHttp send it to Flask <code>POST /transcribe</code>.</p></article>
+          <article id="speech-server"><h3>Flask returns the words</h3><p><code>api/transcribe.py</code> checks the session and upload. <code>stt_service.py</code> calls OpenAI transcription and returns text as JSON.</p></article>
+          <article id="speech-review-note"><h3>Review your speech → Use text</h3><p>The returned words appear in an editable dialog. <strong>Use text</strong> adds the text to the current Chat or Memo draft.</p><p class="muted">Chat still needs Send. Memo still needs Review and save, then confirmation.</p></article>
+          <div class="hint" id="speech-states"><strong>The ViewModel tracks the phase.</strong><p><code>Recording → Transcribing → Review</code></p><p>Cancel discards the attempt. Temporary audio is removed after use, and leaving the app stops an active recording.</p></div>
+        </div>
+      </div>
+      <details class="sources"><summary>Where this lives in the project</summary><ul>
+        <li>Android: <code>ui/speech/SpeechInput.kt</code>, <code>SpeechViewModel.kt</code>, <code>SpeechUiState.kt</code></li>
+        <li>Android: <code>data/audio/AudioRecorder.kt</code>, <code>data/repository/SpeechRepository.kt</code>, <code>ui/home/HomeScreen.kt</code></li>
+        <li>Flask: <code>api/transcribe.py</code>, <code>services/stt_service.py</code></li>
+      </ul></details>
+    </section>
+
+    <section id="modes" aria-labelledby="modes-heading">
+      <p class="eyebrow">04 / CHAT AND MEMO</p>
+      <h2 id="modes-heading">The same text can become a question or a note.</h2>
+      <p class="intro">Typed text and reviewed speech use the same draft. Each mode has its own Screen, ViewModel, and Repository.</p>
+      <div class="mode-grid">
+        <figure id="chat-mode-figure"><h3>Chat · ask or translate</h3><svg viewBox="0 0 460 806" role="img" aria-labelledby="chat-title chat-description">
+<title id="chat-title">Chat mode after the text is ready</title><desc id="chat-description">The screen calls its ViewModel, the repository uses Retrofit and OkHttp to call Flask, and Flask saves both chat messages in SQLite and the user prompt in Google Sheets.</desc>
+<defs>
+<marker id="chat-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" class="arrow-head"/></marker>
+<marker id="chat-return-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" class="return-head"/></marker>
+</defs>
+<g id="chat-screen"><title>ChatScreen: Draft + Send</title><rect class="box" x="26" y="16" width="408" height="78" rx="9"/><text x="230.0" y="52.0" text-anchor="middle" font-size="22" font-weight="650" class="">ChatScreen</text><text x="230.0" y="78.0" text-anchor="middle" font-size="17" font-weight="400" class="sub">Draft + Send</text></g><g id="chat-edge-screen"><title>Call the next layer</title><path class="edge" d="M230 94 V135" marker-end="url(#chat-arrow)"/></g><g id="chat-viewmodel"><title>ChatViewModel: Keep conversation_id</title><rect class="box" x="26" y="142" width="408" height="78" rx="9"/><text x="230.0" y="178.0" text-anchor="middle" font-size="22" font-weight="650" class="">ChatViewModel</text><text x="230.0" y="204.0" text-anchor="middle" font-size="17" font-weight="400" class="sub">Keep conversation_id</text></g><g id="chat-edge-viewmodel"><title>Call the next layer</title><path class="edge" d="M230 220 V261" marker-end="url(#chat-arrow)"/></g><g id="chat-repository"><title>ChatRepository: Send text + chat ID or Memo IDs</title><rect class="box" x="26" y="268" width="408" height="78" rx="9"/><text x="230.0" y="304.0" text-anchor="middle" font-size="22" font-weight="650" class="">ChatRepository</text><text x="230.0" y="330.0" text-anchor="middle" font-size="17" font-weight="400" class="sub">Send text + chat ID or Memo IDs</text></g><g id="chat-edge-repository"><title>Call the next layer</title><path class="edge" d="M230 346 V387" marker-end="url(#chat-arrow)"/></g><g id="chat-network"><title>Retrofit + OkHttp: POST /chat + Flask token</title><rect class="box" x="26" y="394" width="408" height="78" rx="9"/><text x="230.0" y="430.0" text-anchor="middle" font-size="22" font-weight="650" class="">Retrofit + OkHttp</text><text x="230.0" y="456.0" text-anchor="middle" font-size="17" font-weight="400" class="sub">POST /chat + Flask token</text></g><g id="chat-edge-network"><title>Call the next layer</title><path class="edge" d="M230 472 V513" marker-end="url(#chat-arrow)"/></g><g id="chat-flask"><title>Flask: Generate reply, then save the turn</title><rect class="main-box" x="26" y="520" width="408" height="78" rx="9"/><text x="230.0" y="556.0" text-anchor="middle" font-size="22" font-weight="650" class="">Flask</text><text x="230.0" y="582.0" text-anchor="middle" font-size="17" font-weight="400" class="sub">Generate reply, then save the turn</text></g><g id="chat-storage-branch"><title>Flask saves chat history to SQLite and the user prompt to Google Sheets</title><path class="edge" d="M230 598 V624 H120 V649" marker-end="url(#chat-arrow)"/><path class="edge" d="M230 624 H340 V649" marker-end="url(#chat-arrow)"/></g><g id="chat-sqlite"><title>SQLite: User + AI messages</title><rect class="box" x="12" y="656" width="216" height="82" rx="9"/><text x="120.0" y="694.0" text-anchor="middle" font-size="22" font-weight="650" class="">SQLite</text><text x="120.0" y="720.0" text-anchor="middle" font-size="17" font-weight="400" class="sub">User + AI messages</text></g><g id="chat-sheets"><title>Google Sheet: User prompt · chat</title><rect class="box" x="240" y="656" width="208" height="82" rx="9"/><text x="344.0" y="694.0" text-anchor="middle" font-size="22" font-weight="650" class="">Google Sheet</text><text x="344.0" y="720.0" text-anchor="middle" font-size="17" font-weight="400" class="sub">User prompt · chat</text></g><text x="230" y="777" text-anchor="middle" font-size="18" font-weight="400" class="sub">Reply + Sheet status → Chat UI</text>
+</svg><figcaption>Flask sends the selected conversation history with the new message. The AI reply appears in Chat; Google Sheet records the user's prompt.</figcaption></figure>
+        <figure id="memo-mode-figure"><h3>Memo · save and revisit notes</h3><svg viewBox="0 0 460 806" role="img" aria-labelledby="memo-title memo-description"><title id="memo-title">Memo mode saves to SQLite and copies text to Sheets</title><desc id="memo-description">Confirmed text travels through MemoViewModel, MemoRepository, Retrofit, and OkHttp. Flask first saves a user-owned Memo in SQLite, then copies the text to Sheets. GET /memos loads history for the Android screen.</desc><defs><marker id="memo-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" class="arrow-head"/></marker></defs><g id="memo-screen"><title>MemoScreen: Draft + saved Memo list</title><rect class="box" x="26" y="16" width="408" height="78" rx="9"/><text x="230" y="52" text-anchor="middle" font-size="22" font-weight="650">MemoScreen</text><text x="230" y="78" text-anchor="middle" font-size="17" class="sub">Draft + saved Memo list</text></g><g id="memo-edge-screen"><title>Request or result passes to the next step</title><path class="edge" d="M230 94 V135" marker-end="url(#memo-arrow)"/></g><g id="memo-viewmodel"><title>MemoViewModel: Confirm save · update UiState</title><rect class="box" x="26" y="142" width="408" height="78" rx="9"/><text x="230" y="178" text-anchor="middle" font-size="22" font-weight="650">MemoViewModel</text><text x="230" y="204" text-anchor="middle" font-size="17" class="sub">Confirm save · update UiState</text></g><g id="memo-edge-viewmodel"><title>Request or result passes to the next step</title><path class="edge" d="M230 220 V261" marker-end="url(#memo-arrow)"/></g><g id="memo-repository"><title>MemoRepository: Save a note · load Memo history</title><rect class="box" x="26" y="268" width="408" height="78" rx="9"/><text x="230" y="304" text-anchor="middle" font-size="22" font-weight="650">MemoRepository</text><text x="230" y="330" text-anchor="middle" font-size="17" class="sub">Save a note · load Memo history</text></g><g id="memo-edge-repository"><title>Request or result passes to the next step</title><path class="edge" d="M230 346 V387" marker-end="url(#memo-arrow)"/></g><g id="memo-network"><title>Retrofit + OkHttp: POST /memos + Flask token</title><rect class="box" x="26" y="394" width="408" height="78" rx="9"/><text x="230" y="430" text-anchor="middle" font-size="22" font-weight="650">Retrofit + OkHttp</text><text x="230" y="456" text-anchor="middle" font-size="17" class="sub">POST /memos + Flask token</text></g><g id="memo-edge-network"><title>Request or result passes to the next step</title><path class="edge" d="M230 472 V513" marker-end="url(#memo-arrow)"/></g><g id="memo-flask"><title>Flask Memo service: Save in SQLite, then copy to Sheets</title><rect class="main-box" x="26" y="520" width="408" height="78" rx="9"/><text x="230" y="556" text-anchor="middle" font-size="22" font-weight="650">Flask Memo service</text><text x="230" y="582" text-anchor="middle" font-size="17" class="sub">Save in SQLite, then copy to Sheets</text></g><g id="memo-storage-sqlite"><title>Request or result passes to the next step</title><path class="edge" d="M230 598 V624 H120 V649" marker-end="url(#memo-arrow)"/></g><g id="memo-storage-sheets"><title>Request or result passes to the next step</title><path class="edge" d="M230 624 H344 V649" marker-end="url(#memo-arrow)"/></g><g id="memo-sqlite"><title>1. SQLite: user_id + note text</title><rect class="box" x="12" y="656" width="216" height="82" rx="9"/><text x="120" y="692" text-anchor="middle" font-size="22" font-weight="650">1. SQLite</text><text x="120" y="718" text-anchor="middle" font-size="17" class="sub">user_id + note text</text></g><g id="memo-sheets"><title>2. Google Sheet: User prompt · memo</title><rect class="box" x="240" y="656" width="208" height="82" rx="9"/><text x="344" y="692" text-anchor="middle" font-size="21" font-weight="650">2. Google Sheet</text><text x="344" y="718" text-anchor="middle" font-size="17" class="sub">User prompt · memo</text></g><text x="230" y="777" text-anchor="middle" font-size="18" class="sub">Saved note + copy status → Memo UI</text></svg><figcaption>Saved notes appear under the input area, newest first. <code>GET /memos</code> loads the current user's SQLite history. A failed Sheet copy does not remove the saved Memo.</figcaption></figure>
+      </div>
+      <div class="role-grid">
+        <article class="role-card" id="chat-conversation-note"><h3>How Chat continues a conversation</h3><p><strong>New chat:</strong> the first successful send returns a new <code>conversation_id</code>. <strong>History:</strong> select an existing chat, load its messages, and send the same ID with follow-up questions.</p></article>
+        <article class="role-card" id="mode-response-note"><h3>How saved Memos reach the screen</h3><p>MemoRepository saves through <code>POST /memos</code> and loads history through <code>GET /memos</code>. MemoViewModel publishes the list in UiState; Compose shows notes newest first and lets the user select them.</p></article>
+      </div>
+      <div class="hint" id="chat-sheet-failure"><strong>SQLite data and the Sheet copy have separate outcomes.</strong><p>If Sheets fails, the completed Chat reply or saved SQLite Memo remains available. Compose shows the copy status without discarding the result.</p></div>
+      <details class="sources"><summary>Where this lives in the project</summary><ul>
+        <li>Android: <code>ui/chat/ChatScreen.kt</code>, <code>ChatViewModel.kt</code>, <code>data/repository/ChatRepository.kt</code></li>
+        <li>Android: <code>ui/memo/MemoScreen.kt</code>, <code>MemoViewModel.kt</code>, <code>data/repository/MemoRepository.kt</code></li>
+        <li>Flask: <code>api/chat.py</code>, <code>services/chat_service.py</code>, <code>api/memos.py</code>, <code>services/memo_service.py</code>, <code>services/sheets_service.py</code></li>
+      </ul></details>
+    </section>
+
+
+    <section id="memo-chat" aria-labelledby="memo-chat-heading">
+      <p class="eyebrow">05 / SAVED MEMOS → NEW CHAT</p>
+      <h2 id="memo-chat-heading">Choose notes, add a question, then chat.</h2>
+      <p class="intro">The frontend connects the Memo and Chat modes. Selecting notes prepares a new draft; the user still presses Send to ask a question.</p>
+      <div class="split">
+        <figure id="memo-chat-figure"><svg viewBox="0 0 520 1030" role="img" aria-labelledby="import-title import-description"><title id="import-title">Select saved Memos and start a new Chat</title><desc id="import-description">Android loads and selects one or more Memos, attaches them to a new Chat draft, and sends the question with memo IDs. Flask verifies ownership, provides reference text to OpenAI, and saves chat messages and Memo snapshots. Compose displays the result.</desc><defs><marker id="import-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" class="arrow-head"/></marker></defs><g id="import-list"><title>Memo list / picker: GET /memos · select one or several</title><rect class="box" x="56" y="16" width="408" height="78" rx="9"/><text x="260" y="52" text-anchor="middle" font-size="22" font-weight="650">Memo list / picker</text><text x="260" y="78" text-anchor="middle" font-size="17" class="sub">GET /memos · select one or several</text></g><g id="import-edge-list"><title>Request or result passes to the next step</title><path class="edge" d="M260 94 V133" marker-end="url(#import-arrow)"/></g><g id="import-selection"><title>MemoViewModel: Track selected Memo IDs</title><rect class="box" x="56" y="140" width="408" height="78" rx="9"/><text x="260" y="176" text-anchor="middle" font-size="22" font-weight="650">MemoViewModel</text><text x="260" y="202" text-anchor="middle" font-size="17" class="sub">Track selected Memo IDs</text></g><g id="import-edge-selection"><title>Request or result passes to the next step</title><path class="edge" d="M260 218 V257" marker-end="url(#import-arrow)"/></g><g id="import-draft"><title>ChatViewModel: New Chat draft + attached Memos</title><rect class="box" x="56" y="264" width="408" height="78" rx="9"/><text x="260" y="300" text-anchor="middle" font-size="22" font-weight="650">ChatViewModel</text><text x="260" y="326" text-anchor="middle" font-size="17" class="sub">New Chat draft + attached Memos</text></g><g id="import-edge-draft"><title>Request or result passes to the next step</title><path class="edge" d="M260 342 V381" marker-end="url(#import-arrow)"/></g><g id="import-http"><title>Send the new Chat: ChatRepository → Retrofit → OkHttp</title><rect class="box" x="56" y="388" width="408" height="78" rx="9"/><text x="260" y="424" text-anchor="middle" font-size="22" font-weight="650">Send the new Chat</text><text x="260" y="450" text-anchor="middle" font-size="17" class="sub">ChatRepository → Retrofit → OkHttp</text></g><g id="import-edge-http"><title>Request or result passes to the next step</title><path class="edge" d="M260 466 V505" marker-end="url(#import-arrow)"/></g><g id="import-flask"><title>Flask Chat service: Verify user_id · read selected notes</title><rect class="main-box" x="56" y="512" width="408" height="78" rx="9"/><text x="260" y="548" text-anchor="middle" font-size="22" font-weight="650">Flask Chat service</text><text x="260" y="574" text-anchor="middle" font-size="17" class="sub">Verify user_id · read selected notes</text></g><g id="import-edge-flask"><title>Request or result passes to the next step</title><path class="edge" d="M260 590 V629" marker-end="url(#import-arrow)"/></g><g id="import-ai"><title>OpenAI Responses: Question + Memo reference text</title><rect class="box" x="56" y="636" width="408" height="78" rx="9"/><text x="260" y="672" text-anchor="middle" font-size="22" font-weight="650">OpenAI Responses</text><text x="260" y="698" text-anchor="middle" font-size="17" class="sub">Question + Memo reference text</text></g><g id="import-edge-ai"><title>Request or result passes to the next step</title><path class="edge" d="M260 714 V753" marker-end="url(#import-arrow)"/></g><g id="import-snapshots"><title>SQLite: Chat messages + Memo snapshots</title><rect class="box" x="56" y="760" width="408" height="78" rx="9"/><text x="260" y="796" text-anchor="middle" font-size="22" font-weight="650">SQLite</text><text x="260" y="822" text-anchor="middle" font-size="17" class="sub">Chat messages + Memo snapshots</text></g><g id="import-edge-snapshots"><title>Request or result passes to the next step</title><path class="edge" d="M260 838 V877" marker-end="url(#import-arrow)"/></g><g id="import-display"><title>Compose Chat UI: Reply + attachments + history</title><rect class="box" x="56" y="884" width="408" height="78" rx="9"/><text x="260" y="920" text-anchor="middle" font-size="22" font-weight="650">Compose Chat UI</text><text x="260" y="946" text-anchor="middle" font-size="17" class="sub">Reply + attachments + history</text></g><text x="260" y="1010" text-anchor="middle" font-size="18" class="sub">Follow-ups use the conversation_id</text></svg><figcaption>The first message sends <code>message + memo_ids</code>. Later messages use the returned <code>conversation_id</code>, so Flask can reload the same Memo snapshots.</figcaption></figure>
+        <div class="notes">
+          <article id="import-entry"><h3>1. Two selection entry points</h3><p><strong>Chat:</strong> Add memos → choose notes → Start new chat.<br><strong>Memo:</strong> select history checkboxes → Chat with selected memos.</p><span class="file"><code>MemoScreen.kt · MemoPickerDialog.kt</code></span></article>
+          <article id="import-draft-note"><h3>2. Prepare the Chat draft locally</h3><p><code>HomeRoute</code> passes the selected notes to <code>ChatViewModel.startWithMemos()</code> and switches to Chat. The unsent question is kept. Attached memos can be previewed or removed before the first Send.</p><span class="file"><code>HomeScreen.kt · ChatViewModel.kt · MemoContextPreview.kt</code></span></article>
+          <article id="import-send"><h3>3. Send IDs through the normal API path</h3><p>ChatViewModel → ChatRepository → Retrofit → OkHttp → <code>POST /chat</code>. The request contains the question and selected <code>memo_ids</code>. OkHttp attaches the Flask Bearer token.</p></article>
+          <article id="import-ownership"><h3>4. Flask supplies the note contents</h3><p>The server checks that all selected Memos belong to the current <code>user_id</code>. It reads their text from SQLite and sends the question plus reference material to OpenAI.</p></article>
+          <article id="import-history"><h3>5. Keep the context with the conversation</h3><p>Flask saves the user / AI messages and Memo snapshots in SQLite. History restores both. Reopening this Chat keeps the notes used at the start.</p></article>
+          <div class="hint" id="import-copy-note"><strong>Sheets logs the new question only.</strong><p>The attached notes are stored with the Chat in SQLite. They are not duplicated into the Sheet prompt column.</p><p class="muted">Select up to 10 notes, totaling at most 20,000 characters.</p></div>
+        </div>
+      </div>
+      <details class="sources"><summary>Where this lives in the project</summary><ul>
+        <li>Android: <code>ui/home/HomeScreen.kt</code>, <code>ui/memo/MemoScreen.kt</code>, <code>MemoViewModel.kt</code>, <code>MemoPickerDialog.kt</code></li>
+        <li>Android: <code>ui/chat/ChatScreen.kt</code>, <code>ChatViewModel.kt</code>, <code>MemoContextPreview.kt</code>, <code>data/repository/ChatRepository.kt</code></li>
+        <li>Flask: <code>api/chat.py</code>, <code>services/chat_service.py</code>, <code>db.py</code> and its <code>conversation_memos</code> table</li>
+      </ul></details>
+    </section>
+
+    <section id="backend" aria-labelledby="backend-heading">
+      <p class="eyebrow">06 / FLASK, STORAGE, AND LOGOUT</p>
+      <h2 id="backend-heading">Flask checks the session, then performs the work.</h2>
+      <p class="intro">The Android networking layers call Flask. The same backend routes are used by the Python test clients.</p>
+      <div class="split">
+        <figure id="backend-layers-figure"><svg viewBox="0 0 500 610" role="img" aria-labelledby="backend-title backend-description">
+<title id="backend-title">Inside Flask</title><desc id="backend-description">API routes check requests and call services. Auth, Chat, and Memo use db.py and SQLite. STT calls OpenAI, and sheets_service calls Google Sheets directly.</desc>
+<defs>
+<marker id="backend-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" class="arrow-head"/></marker>
+<marker id="backend-return-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" class="return-head"/></marker>
+</defs>
+<g id="backend-api"><title>api/: Routes, session check, JSON response</title><rect class="main-box" x="46" y="20" width="408" height="88" rx="9"/><text x="250.0" y="61.0" text-anchor="middle" font-size="22" font-weight="650" class="">api/</text><text x="250.0" y="87.0" text-anchor="middle" font-size="17" font-weight="400" class="sub">Routes, session check, JSON response</text></g><g id="backend-edge-api"><title>Call a service function</title><path class="edge" d="M250 108 V155" marker-end="url(#backend-arrow)"/></g><g id="backend-service"><title>services/: Auth, STT, chat, Memo, and Sheets logic</title><rect class="main-box" x="46" y="162" width="408" height="88" rx="9"/><text x="250.0" y="203.0" text-anchor="middle" font-size="22" font-weight="650" class="">services/</text><text x="250.0" y="229.0" text-anchor="middle" font-size="17" font-weight="400" class="sub">Auth, STT, chat, Memo, and Sheets logic</text></g><g id="backend-edge-service"><title>Read or write SQLite</title><path class="edge" d="M250 250 V297" marker-end="url(#backend-arrow)"/></g><g id="backend-db"><title>db.py: SQL queries and transactions</title><rect class="box" x="46" y="304" width="408" height="88" rx="9"/><text x="250.0" y="345.0" text-anchor="middle" font-size="22" font-weight="650" class="">db.py</text><text x="250.0" y="371.0" text-anchor="middle" font-size="17" font-weight="400" class="sub">SQL queries and transactions</text></g><g id="backend-edge-db"><title>Read or write SQLite</title><path class="edge" d="M250 392 V439" marker-end="url(#backend-arrow)"/></g><g id="backend-sqlite"><title>SQLite: Users, sessions, chats, and Memos</title><rect class="box" x="46" y="446" width="408" height="88" rx="9"/><text x="250.0" y="487.0" text-anchor="middle" font-size="22" font-weight="650" class="">SQLite</text><text x="250.0" y="513.0" text-anchor="middle" font-size="17" font-weight="400" class="sub">Users, sessions, chats, and Memos</text></g><text x="250" y="584" text-anchor="middle" font-size="18" font-weight="400" class="sub">Database path for Auth + Chat + Memo</text>
+</svg><figcaption>Auth, Chat, and Memo use this database path. STT calls OpenAI; <code>sheets_service.py</code> calls Google Sheets. Each service uses the storage or API it needs.</figcaption></figure>
+        <div class="notes">
+          <article id="backend-check"><h3>1. Check the Flask token</h3><p><code>require_session</code> validates the Bearer token against its stored hash and expiry. It makes the user and session available as <code>g.chat_session</code> for this request.</p></article>
+          <article id="backend-work"><h3>2. Run the selected feature</h3><p><strong>STT:</strong> OpenAI transcription.<br><strong>Chat:</strong> OpenAI Responses + SQLite history.<br><strong>Memo:</strong> SQLite note + Google Sheet copy.</p></article>
+          <article id="backend-response"><h3>3. Return JSON to Android</h3><p>Return the transcript, chat result, save receipt, or error. Retrofit converts the JSON; the Repository passes the result back to its ViewModel.</p></article>
+          <div class="hint" id="three-ids-note"><strong>Three IDs serve different jobs.</strong><p><code>user_id</code>: the signed-in person.<br><code>session_id</code>: this login session.<br><code>conversation_id</code>: one chat thread.</p></div>
+        </div>
+      </div>
+      <div class="storage-grid" aria-label="Current data locations">
+        <article class="storage-card" id="storage-session"><span class="location">ANDROID · MEMORY</span><h3>SessionStore</h3><p>Current Flask token and user. The token is lost when the app process ends, so the next launch requires sign-in.</p></article>
+        <article class="storage-card" id="storage-sqlite"><span class="location">FLASK · SQLITE</span><h3>Login, Chat, and Memo history</h3><p>Users, login challenges, session token hashes, conversations, user / AI messages, Memos, and Memo snapshots attached to chats.</p><span class="file"><code>instance/voicebridge.sqlite3</code></span></article>
+        <article class="storage-card" id="storage-sheets"><span class="location">GOOGLE SHEET · LOGS</span><h3>Submitted user text</h3><p>Timestamp, SessionID, Mode, and Prompt. Mode is <code>chat</code> or <code>memo</code>. Flask writes using its service account.</p></article>
+      </div>
+      <div class="role-grid" id="logout-flow" aria-label="Frontend and backend sign-out flow">
+        <article class="role-card" id="logout-request"><h3>Sign out · end the current session</h3><p>Compose → AuthViewModel → AuthRepository → Retrofit + OkHttp → <code>POST /auth/logout</code>. Flask expires the current app session in SQLite.</p></article>
+        <article class="role-card" id="logout-ui"><h3>Return to the login screen</h3><p>AuthRepository clears SessionStore. The app clears its workspace and Credential Manager app state; Compose shows sign-in again. The Google account remains on the device.</p></article>
+      </div>
+      <div class="hint" id="history-user-note"><strong>History belongs to user_id, not the login session.</strong><p>A later login creates a new <code>session_id</code> and token, while the same Google account resolves the same <code>user_id</code>. Saved Chat and Memo history remains available.</p></div>
+      <details class="sources"><summary>Where this lives in the project</summary><ul>
+        <li><code>VoiceBridge/app.py</code>, <code>api/sessions.py</code>, <code>services/session_service.py</code>, <code>db.py</code></li>
+        <li><code>VoiceBridge/services/chat_service.py</code>, <code>services/stt_service.py</code>, <code>services/memo_service.py</code>, <code>services/sheets_service.py</code></li>
+      </ul></details>
+    </section>
+  </main>
+  <footer>
+    <p class="next"><strong>Try the same workflow interactively:</strong> <a href="voicebridge-interactive-journey-en.html">Google sign-in → Chat / Memo → history → sign-out</a>. This guide is the printable companion.</p>
+    <p>Frontend + backend companion to <a href="voicebridge-flowcharts-en.html">the original backend flowcharts</a>. Updated for Memo history and selected-Memo Chat, based on the current VoiceBridge source code. Design follows the supplied reference: simple outlined boxes, clear arrows, and a dark canvas, with an optional light theme. No external assets are required.</p>
+  </footer>
+</div>
+<script>
+(() => {
+  const root = document.documentElement;
+  const toggle = document.getElementById('theme-toggle');
+  const chosen = new URLSearchParams(location.search).get('theme');
+  root.dataset.theme = chosen === 'light' ? 'light' : 'dark';
+  const updateLabel = () => {
+    toggle.textContent = root.dataset.theme === 'dark' ? 'Light mode' : 'Dark mode';
+    toggle.setAttribute('aria-label', 'Switch to ' + toggle.textContent.toLowerCase());
+  };
+  updateLabel();
+  toggle.addEventListener('click', () => {
+    root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+    updateLabel();
+  });
+  document.getElementById('print-page').addEventListener('click', () => window.print());
+})();
+</script>
+</body>
+</html>
