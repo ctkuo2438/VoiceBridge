@@ -33,7 +33,7 @@ def google_challenge():
     return jsonify(**result), 201
 
 
-# Receive Google ID token and nonce from Android, and send back Flask session token after successful verification.
+# Verify Google's ID token and nonce, then return a Flask-signed app access JWT.
 @bp.post("/google")
 def google_login():
     data = json_body()

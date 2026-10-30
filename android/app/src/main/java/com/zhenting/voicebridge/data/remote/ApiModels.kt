@@ -106,3 +106,5 @@ data class MemoSaveResponse(
 )
 
 data class TranscriptionResponse(val text: String? = null)
+
+data class TtsRequest(val text: String)

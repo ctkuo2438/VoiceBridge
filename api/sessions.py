@@ -27,7 +27,7 @@ def require_session(view):
             raise ApiError(
                 401,
                 "unauthorized",
-                "Sign in with Google and send the Flask session Bearer token.",
+                "Sign in with Google and send the Flask access JWT as a Bearer token.",
             )
 
         g.chat_session = session_service.resolve_session(parts[1])

@@ -55,7 +55,7 @@
     <string name="chat_sheet_saved">Prompt saved to Google Sheet.</string>
     <string name="chat_sheet_unconfirmed">Your reply is saved in this conversation. Google Sheet save could not be confirmed.</string>
     <string name="memo_title">Write a memo</string>
-    <string name="memo_description">Edit and save your note. Your saved memos appear below, newest first.</string>
+    <string name="memo_description">Capture a thought, a plan, or something to remember.</string>
     <string name="memo_input_label">Your note</string>
     <string name="memo_save">Review and save</string>
     <string name="memo_confirm_title">Save this memo?</string>
@@ -111,4 +111,23 @@
     <string name="speech_too_large">The recording exceeds 25 MB. Please make a shorter recording.</string>
     <string name="speech_no_text">No speech was recognized. Please try again.</string>
     <string name="speech_unavailable">Speech recognition is temporarily unavailable. Please try again.</string>
+    <string name="tts_read">Read aloud</string>
+    <string name="tts_stop">Stop</string>
+    <string name="tts_cancel">Cancel speech</string>
+    <string name="tts_generating">Generating audio…</string>
+    <string name="tts_preparing">Preparing audio…</string>
+    <string name="tts_playing">Playing · AI voice</string>
+    <string name="tts_part">Part %1$d of %2$d</string>
+    <string name="tts_invalid_text">Choose some text to read aloud.</string>
+    <string name="tts_session_expired">Your session ended. Sign in again to read aloud.</string>
+    <string name="tts_unavailable">Speech generation is temporarily unavailable. Try again later.</string>
+    <string name="tts_rate_limited">Speech generation limit reached. Try again later.</string>
+    <string name="tts_invalid_audio">The audio could not be read. Try again.</string>
+    <string name="tts_playback_unavailable">Audio playback is unavailable. Check your audio output and try again.</string>
+    <string name="tts_interrupted">Playback was interrupted. Tap Read aloud to try again.</string>
+    <string name="auth_hint">Speak an idea. Save it. Keep the conversation going.</string>
+    <string name="chat_empty_title">What is on your mind?</string>
+    <string name="chat_empty_description">Ask a question, translate something, or bring your saved notes into the conversation.</string>
+    <string name="memo_empty_title">A little space for your ideas</string>
+    <string name="memo_empty_description">Your saved notes will appear here. Type a thought or use your voice to get started.</string>
 </resources>

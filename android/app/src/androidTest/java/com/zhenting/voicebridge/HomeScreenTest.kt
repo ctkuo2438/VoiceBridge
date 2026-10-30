@@ -22,6 +22,10 @@ import com.zhenting.voicebridge.data.repository.GoogleLoginChallenge
 import com.zhenting.voicebridge.data.repository.MemoRepository
 import com.zhenting.voicebridge.data.repository.SpeechRepository
 import com.zhenting.voicebridge.data.audio.AudioRecorder
+import com.zhenting.voicebridge.data.audio.AudioPlayer
+import com.zhenting.voicebridge.data.repository.TtsRepository
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
 import android.Manifest
@@ -45,6 +49,9 @@ class HomeScreenTest {
     private val auth = FakeAuth()
     private val chats = mutableMapOf<String, FakeChat>()
     private val memos = mutableMapOf<String, FakeMemo>()
+    private val readTexts = mutableListOf<Pair<String, String>>()
+    private val player = FakePlayer()
+    private var audioGate: CompletableDeferred<ByteArray>? = null
 
     private fun start() {
         composeRule.setContent {
@@ -60,7 +67,14 @@ class HomeScreenTest {
                             createSpeechRepository = { object : SpeechRepository {
                                 override suspend fun transcribe(audio: File) = "Recognized speech"
                             } },
-                            createAudioRecorder = { FakeRecorder() })
+                            createAudioRecorder = { FakeRecorder() },
+                            createTtsRepository = { id -> object : TtsRepository {
+                                override suspend fun synthesize(text: String): ByteArray {
+                                    readTexts.add(id to text)
+                                    return audioGate?.await() ?: byteArrayOf(1)
+                                }
+                            } },
+                            createAudioPlayer = { player })
                     })
             }
         }
@@ -240,6 +254,72 @@ class HomeScreenTest {
         composeRule.onNodeWithTag("chat_input").assertTextContains("Unsent question")
         composeRule.onNodeWithTag("attached_memos_button").assertDoesNotExist()
         composeRule.runOnIdle { assertTrue(chats.getValue("a").sentTo.isEmpty()) }
+    }
+
+    @Test
+    fun assistantRepliesCanBeReadAndStoppedWithoutResendingTheChat() {
+        start()
+        composeRule.onNodeWithTag("chat_input").performTextInput("Hello")
+        composeRule.onNodeWithTag("send_message_button").performClick()
+        composeRule.onNodeWithTag("tts_play_chat:c-new:102").performClick()
+        composeRule.onNodeWithTag("tts_stop_chat:c-new:102").assertIsDisplayed()
+        composeRule.runOnIdle {
+            assertEquals(listOf("a" to "Reply: Hello"), readTexts)
+            assertTrue(player.playing)
+            assertEquals(1, chats.getValue("a").sentTo.size)
+        }
+        composeRule.onNodeWithTag("tts_stop_chat:c-new:102").performClick()
+        composeRule.runOnIdle { assertTrue(!player.playing) }
+        composeRule.onNodeWithTag("tts_play_chat:c-new:102").performClick()
+        composeRule.onNodeWithTag("new_chat_button").performClick()
+        composeRule.runOnIdle { assertTrue(!player.playing) }
+    }
+
+    @Test
+    fun savedMemosCanBeReadAndModeSwitchStopsTheirPlayback() {
+        memos["a"] = FakeMemo().apply {
+            records.add(Memo("read-me", "Read this saved memo.", "2026-10-28T12:00:00Z", SheetSaveStatus.Saved))
+        }
+        start()
+        composeRule.onNodeWithTag("memo_tab").performClick()
+        composeRule.onNodeWithTag("memo_list").performScrollToNode(hasTestTag("tts_play_memo:read-me"))
+        composeRule.onNodeWithTag("tts_play_memo:read-me").performClick()
+        composeRule.onNodeWithTag("tts_stop_memo:read-me").assertIsDisplayed()
+        composeRule.runOnIdle {
+            assertEquals(listOf("a" to "Read this saved memo."), readTexts)
+            assertTrue(memos.getValue("a").prompts.isEmpty())
+        }
+        composeRule.onNodeWithTag("chat_tab").performClick()
+        composeRule.runOnIdle { assertTrue(!player.playing) }
+    }
+
+    @Test
+    fun cancellingGenerationPreventsLateAudioAndSignOutStopsPlayback() {
+        audioGate = CompletableDeferred()
+        start()
+        composeRule.onNodeWithTag("chat_input").performTextInput("Hello")
+        composeRule.onNodeWithTag("send_message_button").performClick()
+        composeRule.onNodeWithTag("tts_play_chat:c-new:102").performClick()
+        composeRule.onNodeWithTag("tts_status_chat:c-new:102").assertTextEquals("Generating audio…")
+        composeRule.onNodeWithTag("tts_stop_chat:c-new:102").performClick()
+        composeRule.runOnIdle { checkNotNull(audioGate).complete(byteArrayOf(1)) }
+        composeRule.onNodeWithTag("tts_play_chat:c-new:102").assertIsDisplayed()
+        composeRule.runOnIdle { assertTrue(!player.playing) }
+        composeRule.onNodeWithTag("tts_play_chat:c-new:102").performClick()
+        composeRule.runOnIdle { assertTrue(player.playing) }
+        composeRule.onNodeWithTag("home_sign_out_button").performClick()
+        composeRule.onNodeWithTag("google_sign_in_button").assertIsDisplayed()
+        composeRule.runOnIdle { assertTrue(!player.playing) }
+    }
+
+    private class FakePlayer : AudioPlayer {
+        var playing = false
+        override suspend fun play(audio: ByteArray, onStarted: () -> Unit) {
+            playing = true
+            onStarted()
+            try { awaitCancellation() } finally { playing = false }
+        }
+        override fun stop() { playing = false }
     }
 
     private class FakeRecorder : AudioRecorder {

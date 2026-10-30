@@ -27,6 +27,7 @@ import com.zhenting.voicebridge.ui.theme.VoiceBridgeTheme
 import com.zhenting.voicebridge.ui.home.HomeRoute
 import com.zhenting.voicebridge.ui.home.WorkspaceViewModel
 import com.zhenting.voicebridge.data.audio.AndroidAudioRecorder
+import com.zhenting.voicebridge.data.audio.AndroidAudioPlayer
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -81,7 +82,9 @@ class MainActivity : ComponentActivity() {
                                     onDismissAuthError = authViewModel::dismissError,
                                     modifier = contentModifier,
                                     createSpeechRepository = container::speechRepository,
-                                    createAudioRecorder = { AndroidAudioRecorder(audioContext) }
+                                    createAudioRecorder = { AndroidAudioRecorder(audioContext) },
+                                    createTtsRepository = container::ttsRepository,
+                                    createAudioPlayer = { AndroidAudioPlayer(audioContext) }
                                 )
                             }
                         )

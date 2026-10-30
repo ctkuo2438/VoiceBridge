@@ -73,10 +73,10 @@
         });
 
         if (typeof result.access_token !== "string" || !result.access_token) {
-          throw new Error("Flask did not return a session token.");
+          throw new Error("Flask did not return an app access JWT.");
         }
 
-        statusElement.textContent = "Signed in. Flask session token received.";
+        statusElement.textContent = "Signed in. Flask app access JWT received.";
         outputElement.textContent = JSON.stringify(result, null, 2);
       } catch (error) {
         statusElement.textContent =

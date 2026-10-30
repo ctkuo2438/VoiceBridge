@@ -33,6 +33,7 @@ def test_app(client=None, config=None):
         "TESTING": True,
         "DATABASE": str(Path(directory.name) / "test.sqlite3"),
         "GOOGLE_CLIENT_ID": "offline-test-client.apps.googleusercontent.com",
+        "JWT_SECRET_KEY": "offline-test-signing-key-" + "a" * 48,
     }
     if config:
         settings.update(config)

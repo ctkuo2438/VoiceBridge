@@ -2,6 +2,7 @@
 """Google ID-token verification for application sign-in."""
 
 import secrets
+import re
 import requests
 import time
 import db
@@ -18,6 +19,7 @@ from google.oauth2 import id_token
 from errors import ApiError
 
 GOOGLE_CHALLENGE_SECONDS = 300
+NONCE_PATTERN = re.compile(r"[A-Za-z0-9_-]{43}\Z")
 
 def verify_google_token(
     token: str,
@@ -145,7 +147,7 @@ def complete_google_login(
 ) -> dict:
     if (
         not isinstance(nonce, str)
-        or not session_service.TOKEN_PATTERN.fullmatch(nonce)
+        or not NONCE_PATTERN.fullmatch(nonce)
     ):
         raise ApiError(
             401,

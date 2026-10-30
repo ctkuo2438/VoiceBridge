@@ -119,7 +119,7 @@
         </div>
         <figcaption>Each service uses the API or storage it needs. STT sends audio to OpenAI. Auth, Chat, and Memo use SQLite. The Sheets service writes the user's submitted text to Google Sheets.</figcaption>
       </figure>
-      <p class="note">Feature requests require the Flask Bearer token. The Google login challenge and Google sign-in endpoints are public. Keys and service account credentials stay on the backend.</p>
+      <p class="note">Feature requests require the Flask access JWT in the Bearer header. Flask verifies its signature, issuer, audience, expiry, and active SQLite session; logout revokes that session immediately. The Google login challenge and Google sign-in endpoints are public. Keys and service account credentials stay on the backend.</p>
     </section>
     <footer>Based on <code>api/</code>, <code>services/</code>, and <code>db.py</code> in VoiceBridge. Database: <code>instance/voicebridge.sqlite3</code>. Same outlined style as the companion guide; light mode and printing are available.</footer>
   </main>

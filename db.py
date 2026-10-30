@@ -118,16 +118,6 @@ def init_db(app):
         connection.executescript(SCHEMA)
 
 
-def create_anonymous_session(session_id: str, token_hash: str, expires_at: int):
-    connection = get_db()
-    with connection:
-        connection.execute(
-            """INSERT INTO api_sessions (id, token_hash, user_id, created_at, expires_at)
-               VALUES (?, ?, NULL, ?, ?)""",
-            (session_id, token_hash, utc_now(), expires_at),
-        )
-
-
 # JOIN users: The session must correspond to a user and must not have expired
 def find_session(token_hash: str, now: int):
     return (
@@ -373,14 +363,8 @@ def consume_google_challenge(nonce_hash: str, now: int) -> bool:
     return deleted.rowcount == 1
 
 
-# Within the same database transaction, a new/updated user is added, 
-#  and then a session is created that is bound to the user.
-def save_google_session(
-    profile: dict,
-    session_id: str,
-    token_hash: str,
-    expires_at: int,
-) -> dict:
+def save_google_user(profile: dict) -> dict:
+    """Keep the same app user ID when a Google account signs in again."""
     connection = get_db()
     timestamp = utc_now()
 
@@ -413,14 +397,24 @@ def save_google_session(
         if user is None:
             raise ApiError(500, "user_save_failed", "Could not save the user.")
 
+    return dict(user)
+
+
+def save_authenticated_session(
+    session_id: str,
+    user_id: str,
+    token_hash: str,
+    expires_at: int,
+):
+    """Persist the JWT hash and its revocable session without storing the raw JWT."""
+    connection = get_db()
+    with connection:
         connection.execute(
             """INSERT INTO api_sessions
                (id, token_hash, user_id, created_at, expires_at)
                VALUES (?, ?, ?, ?, ?)""",
-            (session_id, token_hash, user["id"], timestamp, expires_at),
+            (session_id, token_hash, user_id, utc_now(), expires_at),
         )
-
-    return dict(user)
 
 
 # Set session to expire upon logout

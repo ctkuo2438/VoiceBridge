@@ -47,19 +47,20 @@ class RemoteAuthRepository(
 ) : AuthRepository {
     override val user = sessionStore.user
     private val gson = Gson()
-    private val tokenPattern = Regex("[A-Za-z0-9_-]{43}")
+    private val noncePattern = Regex("[A-Za-z0-9_-]{43}")
+    private val appJwtPattern = Regex("[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+")
 
     override suspend fun createGoogleChallenge(): GoogleLoginChallenge {
         val response = request { api.createGoogleChallenge() }
         val clientId = response.clientId
         val nonce = response.nonce
         if (clientId.isNullOrBlank() || !clientId.endsWith(".apps.googleusercontent.com") ||
-            nonce == null || !tokenPattern.matches(nonce)
+            nonce == null || !noncePattern.matches(nonce)
         ) throw AuthException(AuthIssue.InvalidResponse)
         return GoogleLoginChallenge(clientId, nonce, expiration(response.expiresIn))
     }
 
-    // 5. POST /auth/google (ID token + nonce) to Flask, and get Flask access token,
+    // 5. Exchange Google's ID token + nonce for a Flask-signed app access JWT,
     //  then save to sessionStore
     override suspend fun loginWithGoogle(challenge: GoogleLoginChallenge, idToken: String) {
         if (challenge.expiresAtMillis <= nowMillis()) {
@@ -72,7 +73,8 @@ class RemoteAuthRepository(
             api.loginWithGoogle(GoogleLoginRequest(idToken, challenge.nonce))
         }
         val token = response.accessToken
-        if (token == null || !tokenPattern.matches(token) ||
+        // Only check the response format here. Flask verifies the JWT signature and claims.
+        if (token == null || token.length > 4096 || !appJwtPattern.matches(token) ||
             !response.tokenType.equals("Bearer", ignoreCase = true)
         ) throw AuthException(AuthIssue.InvalidResponse)
         val profile = profile(response.user)

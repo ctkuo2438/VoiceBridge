@@ -22,7 +22,8 @@ class RemoteAuthRepositoryTest {
     private lateinit var repository: RemoteAuthRepository
     private var now = 1_000_000L
     private val nonce = "a".repeat(43)
-    private val flaskToken = "b".repeat(43)
+    // A compact JWT-shaped fixture. Server-side signature checks are covered by Flask tests.
+    private val flaskToken = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyLTEifQ." + "b".repeat(43)
     private val profile = UserProfile("user-1", "Test User", "user@example.com", null)
     private val userJson = """{"id":"user-1","name":"Test User","email":"user@example.com","avatar_url":null}"""
 
@@ -119,6 +120,21 @@ class RemoteAuthRepositoryTest {
             addProperty("expires_in", Long.MAX_VALUE)
         }.toString()
         for (body in invalid) {
+            enqueue(body, 201)
+            expectIssue(AuthIssue.InvalidResponse) {
+                repository.loginWithGoogle(challenge(), "test-google-id-token")
+            }
+            assertNull(sessions.accessToken())
+            assertNull(repository.user.value)
+        }
+    }
+
+    @Test
+    fun opaqueAndMalformedAppTokensCannotCreateALocalSession() = runTest {
+        for (token in listOf("b".repeat(43), "a.b", "a..c", "a.b.c.d", "a.b.c\n", "a.b." + "c".repeat(4096))) {
+            val body = JsonParser.parseString(loginJson()).asJsonObject.apply {
+                addProperty("access_token", token)
+            }.toString()
             enqueue(body, 201)
             expectIssue(AuthIssue.InvalidResponse) {
                 repository.loginWithGoogle(challenge(), "test-google-id-token")

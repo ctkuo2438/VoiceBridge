@@ -9,6 +9,8 @@ import retrofit2.http.Tag
 import retrofit2.http.Multipart
 import retrofit2.http.Part
 import okhttp3.MultipartBody
+import okhttp3.ResponseBody
+import retrofit2.http.Streaming
 import com.zhenting.voicebridge.data.session.SessionCredentials
 
 interface VoiceBridgeApi {
@@ -59,4 +61,11 @@ interface VoiceBridgeApi {
         @Part file: MultipartBody.Part,
         @Tag credentials: SessionCredentials
     ): Response<TranscriptionResponse>
+
+    @Streaming
+    @POST("tts")
+    suspend fun createSpeech(
+        @Body request: TtsRequest,
+        @Tag credentials: SessionCredentials
+    ): Response<ResponseBody>
 }

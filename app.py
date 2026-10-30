@@ -12,6 +12,7 @@ import db
 from api.chat import bp as chat_bp
 from api.sessions import bp as sessions_bp
 from api.transcribe import bp as transcribe_bp
+from api.tts import bp as tts_bp
 from api.memos import bp as memos_bp
 from api.auth import bp as auth_bp
 from errors import register_error_handlers
@@ -36,6 +37,9 @@ def create_app(config=None, *, openai_client=None):
         OPENAI_MODEL=(settings.get("OPENAI_MODEL") or "").strip() or "gpt-5.6-sol",
         OPENAI_REASONING_EFFORT=(settings.get("OPENAI_REASONING_EFFORT") or "").strip() or "medium",
         SESSION_TTL_SECONDS=int(settings.get("SESSION_TTL_SECONDS") or "86400"),
+        JWT_SECRET_KEY=(settings.get("JWT_SECRET_KEY") or "").strip(),
+        JWT_ISSUER=(settings.get("JWT_ISSUER") or "").strip() or "voicebridge",
+        JWT_AUDIENCE=(settings.get("JWT_AUDIENCE") or "").strip() or "voicebridge-app",
         DATABASE=str(database),
         HOST=settings.get("HOST") or "127.0.0.1",
         PORT=int(settings.get("PORT") or "5003"),
@@ -47,11 +51,29 @@ def create_app(config=None, *, openai_client=None):
         SHEET_NAME=(settings.get("SHEET_NAME") or "").strip() or "Logs",
         # Google SSO
         GOOGLE_CLIENT_ID=(settings.get("GOOGLE_CLIENT_ID") or "").strip(),
+        # Gemini text-to-speech
+        GEMINI_API_KEY=(settings.get("GEMINI_API_KEY") or "").strip(),
+        GEMINI_TTS_MODEL=(settings.get("GEMINI_TTS_MODEL") or "").strip() or "gemini-3.8-flash-tts",
+        GEMINI_TTS_VOICE=(settings.get("GEMINI_TTS_VOICE") or "").strip() or "Kore",
     )
     if config:
         app.config.update(config)
     if app.config["SESSION_TTL_SECONDS"] <= 0:
         raise ValueError("SESSION_TTL_SECONDS must be greater than zero.")
+
+    jwt_secret = app.config["JWT_SECRET_KEY"]
+    if (
+        not isinstance(jwt_secret, str)
+        or len(jwt_secret.encode("utf-8")) < 32
+        or jwt_secret.startswith("replace_")
+    ):
+        raise ValueError(
+            "Set JWT_SECRET_KEY in .env to a random secret of at least 32 bytes, "
+            "then restart Flask."
+        )
+    for name in ("JWT_ISSUER", "JWT_AUDIENCE"):
+        if not isinstance(app.config[name], str) or not app.config[name].strip():
+            raise ValueError(f"{name} must be a nonempty string.")
     
     json_provider = DefaultJSONProvider(app)
     json_provider.ensure_ascii = False
@@ -67,6 +89,7 @@ def create_app(config=None, *, openai_client=None):
     app.register_blueprint(sessions_bp)
     app.register_blueprint(chat_bp)
     app.register_blueprint(transcribe_bp)
+    app.register_blueprint(tts_bp)
     app.register_blueprint(memos_bp)
     app.register_blueprint(auth_bp)
 

@@ -11,6 +11,8 @@ import com.zhenting.voicebridge.data.repository.RemoteChatRepository
 import com.zhenting.voicebridge.data.repository.RemoteMemoRepository
 import com.zhenting.voicebridge.data.repository.SpeechRepository
 import com.zhenting.voicebridge.data.repository.RemoteSpeechRepository
+import com.zhenting.voicebridge.data.repository.TtsRepository
+import com.zhenting.voicebridge.data.repository.RemoteTtsRepository
 import com.zhenting.voicebridge.data.session.SessionStore
 
 class AppContainer(val baseUrl: String) {
@@ -24,6 +26,7 @@ class AppContainer(val baseUrl: String) {
     fun chatRepository(userId: String): ChatRepository = RemoteChatRepository(contentApi, sessionStore, userId)
     fun memoRepository(userId: String): MemoRepository = RemoteMemoRepository(contentApi, sessionStore, userId)
     fun speechRepository(userId: String): SpeechRepository = RemoteSpeechRepository(contentApi, sessionStore, userId)
+    fun ttsRepository(userId: String): TtsRepository = RemoteTtsRepository(contentApi, sessionStore, userId)
 
     val authRepository: AuthRepository by lazy { RemoteAuthRepository(api, sessionStore) }
 

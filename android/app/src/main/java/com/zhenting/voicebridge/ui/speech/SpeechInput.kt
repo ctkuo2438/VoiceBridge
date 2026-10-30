@@ -12,10 +12,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -25,6 +33,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
@@ -38,6 +48,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.zhenting.voicebridge.R
 import com.zhenting.voicebridge.data.model.SpeechIssue
+import com.zhenting.voicebridge.ui.components.AppSymbol
+import com.zhenting.voicebridge.ui.components.SymbolIcon
 
 @Composable
 fun SpeechInput(
@@ -72,15 +84,27 @@ fun SpeechInput(
                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
                         == PackageManager.PERMISSION_GRANTED) onStart(target)
                     else { pendingTarget = target; permission.launch(Manifest.permission.RECORD_AUDIO) }
-                }, enabled = enabled, modifier = Modifier.testTag("speech_record_button")) {
-                    Text(stringResource(R.string.speech_record))
+                }, enabled = enabled, modifier = Modifier.fillMaxWidth().testTag("speech_record_button"),
+                    shape = RoundedCornerShape(20.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    colors = ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.surface),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(Modifier.size(32.dp).clip(RoundedCornerShape(11.dp)).background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center) {
+                            SymbolIcon(AppSymbol.Mic, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                        Text(stringResource(R.string.speech_record), modifier = Modifier.weight(1f))
+                        SymbolIcon(AppSymbol.Voice)
+                    }
                 }
             }
             SpeechPhase.Recording -> {
                 Text(stringResource(R.string.speech_recording, state.elapsedSeconds / 60, state.elapsedSeconds % 60),
                     modifier = Modifier.testTag("speech_recording"), style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onStop, modifier = Modifier.testTag("speech_stop_button")) {
+                    Button(onStop, modifier = Modifier.testTag("speech_stop_button")) {
                         Text(stringResource(R.string.speech_stop))
                     }
                     TextButton(onCancel, modifier = Modifier.testTag("speech_cancel_button")) {

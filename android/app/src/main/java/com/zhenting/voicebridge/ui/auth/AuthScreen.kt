@@ -1,15 +1,15 @@
 package com.zhenting.voicebridge.ui.auth
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
@@ -34,6 +34,8 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextAlign
+import com.zhenting.voicebridge.ui.components.BrandMark
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -81,16 +83,19 @@ fun AuthScreen(
     onConnectionTest: (() -> Unit)? = null
 ) {
     Column(
-        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(Modifier.height(20.dp))
-        Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineLarge)
-        Text(
-            stringResource(R.string.auth_description),
-            style = MaterialTheme.typography.bodyLarge
-        )
-        Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.widthIn(max = 480.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            BrandMark(68.dp)
+            Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineLarge)
+            Text(stringResource(R.string.auth_description), style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Card(Modifier.widthIn(max = 480.dp).fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
             Column(
                 Modifier.fillMaxWidth().padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -105,11 +110,12 @@ fun AuthScreen(
                     }
                 )
                 if (user == null) {
-                    Text(stringResource(R.string.auth_sign_in_description))
+                    Text(stringResource(R.string.auth_sign_in_description), textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Image(
                         painter = painterResource(R.drawable.google_sign_in),
                         contentDescription = stringResource(R.string.auth_google_sign_in),
-                        modifier = Modifier.width(270.dp).height(60.dp)
+                        modifier = Modifier.widthIn(max = 288.dp).fillMaxWidth().height(60.dp)
                             .alpha(if (uiState.isLoading) 0.5f else 1f)
                             .testTag("google_sign_in_button")
                             .clickable(
@@ -149,6 +155,9 @@ fun AuthScreen(
                 }
             }
         }
+        Text(stringResource(R.string.auth_hint), style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(max = 360.dp))
         uiState.error?.let { issue ->
             Card(
                 Modifier.fillMaxWidth(),
