@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark light">
-  <meta name="description" content="VoiceBridge backend architecture: Flask API routes, services, db.py, SQLite, OpenAI, and Google services.">
+  <meta name="description" content="VoiceBridge backend architecture: Flask API routes, services, db.py, SQLite, App JWT signing and verification, OpenAI, Gemini TTS, and Google services.">
   <title>VoiceBridge — Backend Architecture</title>
   <style>
     :root { color-scheme:dark; --bg:#161718; --soft:#222426; --ink:#ededed; --muted:#b1b4b7; --line:#42464a; --accent:#a9c8f8; }
@@ -87,7 +87,7 @@
         <div class="diagram-scroll" tabindex="0" aria-label="Backend diagram. Scroll horizontally on small screens.">
           <svg viewBox="0 0 1160 880" role="img" aria-labelledby="diagram-title diagram-description">
             <title id="diagram-title">VoiceBridge Flask backend architecture</title>
-            <desc id="diagram-description">HTTP requests enter Flask API routes. API routes validate input and sessions, then call services. Services use db.py to read and write SQLite. They also use Google public keys to verify sign-in, call OpenAI for transcription and chat, and write user prompts to Google Sheets. Results return through the API layer.</desc>
+            <desc id="diagram-description">HTTP requests enter Flask API routes. API routes validate input and sessions, then call services. Services use db.py to read and write SQLite. They also use Google public keys to verify sign-in, call OpenAI for transcription and chat, request speech from Gemini TTS, and write user prompts to Google Sheets. Protected requests verify the Flask JWT and active SQLite session. Results return through the API layer.</desc>
             <defs>
               <marker id="backend-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" class="arrow-head"/></marker>
               <marker id="backend-return" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" class="return-head"/></marker>
@@ -96,32 +96,56 @@
             <g id="http-request"><title>HTTP request: JSON or multipart audio</title><rect class="box" x="408" y="22" width="344" height="74" rx="9"/><text x="580" y="53" text-anchor="middle" font-size="24" font-weight="650">HTTP request</text><text x="580" y="79" text-anchor="middle" font-size="17" class="sub">JSON or multipart audio</text></g>
             <g id="request-to-api"><title>The request enters Flask API routes</title><path class="edge" d="M552 96V165" marker-end="url(#backend-arrow)"/></g>
             <g id="api-to-client"><title>Flask returns the HTTP response</title><path class="return-edge" d="M608 172V103" marker-end="url(#backend-return)"/></g>
-            <g id="api-layer"><title>api/: routing, input validation, session checks, and JSON responses</title><rect class="main-box" x="408" y="172" width="344" height="88" rx="9"/><text x="580" y="207" text-anchor="middle" font-size="26" font-weight="650">api/</text><text x="580" y="235" text-anchor="middle" font-size="17" class="sub">Routes · validation · session checks</text></g>
+            <g id="api-layer"><title>api/: routing, input validation, session checks, and JSON responses</title><rect class="main-box" x="408" y="172" width="344" height="88" rx="9"/><text x="580" y="207" text-anchor="middle" font-size="26" font-weight="650">api/</text><text x="580" y="235" text-anchor="middle" font-size="17" class="sub">Routes · JWT + session checks</text></g>
             <g id="api-to-services"><title>API routes call service functions</title><path class="edge" d="M552 260V325" marker-end="url(#backend-arrow)"/></g>
             <g id="services-to-api"><title>Services return a result to the route</title><path class="return-edge" d="M608 332V267" marker-end="url(#backend-return)"/></g>
-            <g id="service-layer"><title>services/: authentication, STT, chat, Memo, and Sheets logic</title><rect class="main-box" x="408" y="332" width="344" height="100" rx="9"/><text x="580" y="369" text-anchor="middle" font-size="26" font-weight="650">services/</text><text x="580" y="399" text-anchor="middle" font-size="17" class="sub">Auth · STT · Chat · Memo · Sheets</text></g>
+            <g id="service-layer"><title>services/: authentication, STT, chat, Memo, TTS, and Sheets logic</title><rect class="main-box" x="408" y="332" width="344" height="100" rx="9"/><text x="580" y="369" text-anchor="middle" font-size="26" font-weight="650">services/</text><text x="580" y="399" text-anchor="middle" font-size="17" class="sub">Auth · STT · Chat · Memo · TTS · Sheets</text></g>
             <g id="google-check-call"><title>Authentication uses Google's public keys to verify ID tokens</title><path class="edge" d="M408 358H331" marker-end="url(#backend-arrow)"/></g>
             <g id="google-check-result"><title>Public key material returns for token verification</title><path class="return-edge" d="M324 402H401" marker-end="url(#backend-return)"/></g>
             <g id="google-identity"><title>Google Identity: public keys for ID-token verification</title><rect class="box" x="36" y="332" width="288" height="100" rx="9"/><text x="180" y="369" text-anchor="middle" font-size="23" font-weight="650">Google Identity</text><text x="180" y="399" text-anchor="middle" font-size="16" class="sub">Public keys for ID-token checks</text></g>
             <g id="openai-call"><title>STT and Chat services call OpenAI</title><path class="edge" d="M752 358H837" marker-end="url(#backend-arrow)"/></g>
             <g id="openai-result"><title>OpenAI returns recognized text or an AI reply</title><path class="return-edge" d="M844 402H759" marker-end="url(#backend-return)"/></g>
             <g id="openai-api"><title>OpenAI: Audio Transcriptions and Responses APIs</title><rect class="box" x="844" y="332" width="280" height="100" rx="9"/><text x="984" y="365" text-anchor="middle" font-size="24" font-weight="650">OpenAI</text><text x="984" y="392" text-anchor="middle" font-size="17" class="sub">Audio Transcriptions</text><text x="984" y="416" text-anchor="middle" font-size="17" class="sub">Responses · chat / translation</text></g>
+
+            <g id="gemini-call"><title>The TTS service sends text to Gemini using backend credentials</title><path class="edge" d="M752 384H792V510H837" marker-end="url(#backend-arrow)"/></g>
+            <g id="gemini-result"><title>Generated audio returns for WAV packaging and the HTTP response</title><path class="return-edge" d="M844 554H804V406H759" marker-end="url(#backend-return)"/></g>
+            <g id="gemini-tts"><title>Gemini TTS produces speech from text; Flask returns audio/wav</title><rect class="box" x="844" y="474" width="280" height="100" rx="9"/><text x="984" y="508" text-anchor="middle" font-size="23" font-weight="650">Gemini TTS</text><text x="984" y="536" text-anchor="middle" font-size="17" class="sub">Text to speech · WAV audio</text><text x="984" y="560" text-anchor="middle" font-size="15" class="sub">Backend key + model + voice</text></g>
             <g id="services-to-db"><title>Services use db.py to access persisted data</title><path class="edge" d="M552 432V589" marker-end="url(#backend-arrow)"/><text x="627" y="512" font-size="16" class="sub">Read / write</text></g>
             <g id="db-to-services"><title>Database query results return to the service</title><path class="return-edge" d="M608 596V439" marker-end="url(#backend-return)"/></g>
             <g id="db-module"><title>db.py: SQL queries, connections, and database transactions</title><rect class="box" x="408" y="596" width="344" height="80" rx="9"/><text x="580" y="629" text-anchor="middle" font-size="25" font-weight="650">db.py</text><text x="580" y="657" text-anchor="middle" font-size="17" class="sub">SQL · connections · transactions</text></g>
             <g id="db-to-sqlite"><title>db.py executes SQL against SQLite</title><path class="edge" d="M552 676V741" marker-end="url(#backend-arrow)"/><text x="627" y="716" font-size="16" class="sub">SQL</text></g>
             <g id="sqlite-to-db"><title>SQLite returns rows and commit results</title><path class="return-edge" d="M608 748V683" marker-end="url(#backend-return)"/></g>
             <g id="sqlite-storage"><title>SQLite stores users, sessions, login challenges, chats, Memos, and saved Memo context</title><rect class="box" x="408" y="748" width="344" height="88" rx="9"/><text x="580" y="779" text-anchor="middle" font-size="24" font-weight="650">SQLite</text><text x="580" y="805" text-anchor="middle" font-size="15" class="sub">Users · sessions · login challenges</text><text x="580" y="825" text-anchor="middle" font-size="15" class="sub">Chats · messages · Memos · snapshots</text></g>
-            <g id="sheets-call"><title>The Sheets service appends submitted user prompt text</title><path class="edge" d="M752 418H808V634H837" marker-end="url(#backend-arrow)"/></g>
-            <g id="sheets-result"><title>Sheets returns the append result to Flask</title><path class="return-edge" d="M844 672H824V426H759" marker-end="url(#backend-return)"/></g>
+            <g id="sheets-call"><title>The Sheets service appends submitted user prompt text</title><path class="edge" d="M752 418H816V634H837" marker-end="url(#backend-arrow)"/></g>
+            <g id="sheets-result"><title>Sheets returns the append result to Flask</title><path class="return-edge" d="M844 672H828V426H759" marker-end="url(#backend-return)"/></g>
             <g id="sheets-api"><title>Google Sheets: prompt log, accessed using the backend service account</title><rect class="box" x="844" y="596" width="280" height="100" rx="9"/><text x="984" y="632" text-anchor="middle" font-size="23" font-weight="650">Google Sheets</text><text x="984" y="660" text-anchor="middle" font-size="17" class="sub">User prompts · chat / memo</text><text x="984" y="682" text-anchor="middle" font-size="15" class="sub">Backend service account</text></g>
           </svg>
         </div>
-        <figcaption>Each service uses the API or storage it needs. STT sends audio to OpenAI. Auth, Chat, and Memo use SQLite. The Sheets service writes the user's submitted text to Google Sheets.</figcaption>
+        <figcaption>Each service uses the API or storage it needs. STT and Chat use OpenAI. TTS requests speech from Gemini and returns audio/wav to Android. Auth, Chat and Memo use SQLite; Google Sheets stores submitted user prompts. TTS creates no new prompt record.</figcaption>
       </figure>
-      <p class="note">Feature requests require the Flask access JWT in the Bearer header. Flask verifies its signature, issuer, audience, expiry, and active SQLite session; logout revokes that session immediately. The Google login challenge and Google sign-in endpoints are public. Keys and service account credentials stay on the backend.</p>
+      <p class="note">Feature requests require the Flask access JWT in the Bearer header. Flask verifies its signature, issuer, audience, expiry, and active SQLite session; logout revokes that session immediately. The Google login challenge and Google sign-in endpoints are public. OpenAI and Gemini keys, JWT_SECRET_KEY and the Sheets service account credentials stay on the backend.</p>
     </section>
-    <footer>Based on <code>api/</code>, <code>services/</code>, and <code>db.py</code> in VoiceBridge. Database: <code>instance/voicebridge.sqlite3</code>. Same outlined style as the companion guide; light mode and printing are available.</footer>
+
+    <section id="jwt-lifecycle" aria-labelledby="jwt-heading" style="margin-top:30px">
+      <h2 id="jwt-heading">Google identity and the Flask App JWT</h2>
+      <figure id="jwt-lifecycle-figure">
+        <div class="diagram-scroll" tabindex="0" aria-label="App JWT lifecycle">
+          <svg viewBox="0 0 1160 210" role="img" aria-labelledby="jwt-title jwt-description">
+            <title id="jwt-title">From Google identity proof to revocable app access</title>
+            <desc id="jwt-description">Google supplies an ID token. Flask verifies it and the nonce, signs its own HS256 JWT, and saves a hash with the SQLite session. Protected requests check the signature, claims and active session. Logout revokes the session.</desc>
+            <defs><marker id="jwt-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" class="arrow-head"/></marker></defs>
+            <g id="jwt-google"><title>Google proves identity with a signed ID token</title><rect class="box" x="20" y="36" width="240" height="116" rx="9"/><text x="140" y="77" text-anchor="middle" font-size="22" font-weight="650">Google ID token</text><text x="140" y="113" text-anchor="middle" font-size="17" class="sub">Identity proof + nonce</text></g>
+            <g id="jwt-identity"><title>auth_service checks Google identity and the one-use nonce</title><rect class="main-box" x="312" y="36" width="240" height="116" rx="9"/><text x="432" y="77" text-anchor="middle" font-size="21" font-weight="650">Verify Google identity</text><text x="432" y="113" text-anchor="middle" font-size="17" class="sub">Signature · claims · nonce</text></g>
+            <g id="jwt-sign"><title>session_service signs HS256 app JWTs and stores a hash in SQLite</title><rect class="main-box" x="604" y="36" width="240" height="116" rx="9"/><text x="724" y="77" text-anchor="middle" font-size="22" font-weight="650">Sign the App JWT</text><text x="724" y="113" text-anchor="middle" font-size="17" class="sub">HS256 + SQLite hash</text></g>
+            <g id="jwt-check"><title>Protected API calls check the JWT and session; logout revokes that session</title><rect class="box" x="896" y="36" width="240" height="116" rx="9"/><text x="1016" y="77" text-anchor="middle" font-size="22" font-weight="650">Verify / revoke</text><text x="1016" y="113" text-anchor="middle" font-size="17" class="sub">Claims + active session</text></g>
+            <g id="jwt-edges"><title>Identity verification, signing and protected access</title><path class="edge" d="M260 94H305" marker-end="url(#jwt-arrow)"/><path class="edge" d="M552 94H597" marker-end="url(#jwt-arrow)"/><path class="edge" d="M844 94H889" marker-end="url(#jwt-arrow)"/></g>
+          </svg>
+        </div>
+        <figcaption><code>session_service.py</code> uses <code>JWT_SECRET_KEY</code> to sign and verify claims: <code>sub</code>, <code>sid</code>, <code>iat</code>, <code>exp</code>, <code>iss</code>, <code>aud</code>. SQLite revocation rejects a logged-out JWT even when its signature and expiry are still valid.</figcaption>
+      </figure>
+    </section>
+
+    <footer>Based on <code>api/</code>, <code>services/</code>, and <code>db.py</code> in VoiceBridge. Database: <code>instance/voicebridge.sqlite3</code>. Updated 30 Oct 2026 for App JWTs and Gemini TTS. Same outlined style as the companion guide; light mode and printing are available.</footer>
   </main>
   <script>
     (function () {
