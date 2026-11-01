@@ -5,7 +5,7 @@ const val MAX_RECORDING_SECONDS = 120
 
 enum class SpeechIssue {
     PermissionDenied, RecordingUnavailable, Interrupted, NoAudio, TooLarge, NoSpeech,
-    Network, Timeout, SessionExpired, Unavailable
+    Network, Timeout, SessionExpired, Unavailable, LocalStorage
 }
 
 class SpeechException(val issue: SpeechIssue) : Exception(issue.name)

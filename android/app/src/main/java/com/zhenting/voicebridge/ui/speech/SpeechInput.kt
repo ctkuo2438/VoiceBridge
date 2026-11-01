@@ -62,7 +62,8 @@ fun SpeechInput(
     onEditTranscript: (String) -> Unit,
     onUseTranscript: () -> Unit,
     enabled: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onRetry: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -120,6 +121,18 @@ fun SpeechInput(
                 }
             }
             SpeechPhase.Review -> Unit
+            SpeechPhase.Retry -> {
+                Text(stringResource(if (state.target == SpeechTarget.Memo) R.string.speech_saved_memo else R.string.speech_saved_chat),
+                    modifier = Modifier.testTag("speech_recording_kept"), style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onRetry, enabled = enabled, modifier = Modifier.testTag("speech_retry_button")) {
+                        Text(stringResource(R.string.speech_retry))
+                    }
+                    TextButton(onCancel, enabled = enabled, modifier = Modifier.testTag("speech_discard_button")) {
+                        Text(stringResource(R.string.speech_discard))
+                    }
+                }
+            }
         }
         state.error?.let { issue ->
             Text(stringResource(issue.messageResource()), color = MaterialTheme.colorScheme.error,
@@ -142,7 +155,7 @@ fun SpeechInput(
             }
         },
         confirmButton = {
-            TextButton(onClick = { keyboard?.hide(); onUseTranscript() }, enabled = state.text.isNotBlank(),
+            TextButton(onClick = { keyboard?.hide(); onUseTranscript() }, enabled = enabled && state.text.isNotBlank(),
                 modifier = Modifier.testTag("speech_use_text_button")) {
                 Text(stringResource(R.string.speech_use_text))
             }
@@ -162,4 +175,5 @@ private fun SpeechIssue.messageResource(): Int = when (this) {
     SpeechIssue.Timeout -> R.string.request_timeout
     SpeechIssue.SessionExpired -> R.string.auth_session_expired
     SpeechIssue.Unavailable -> R.string.speech_unavailable
+    SpeechIssue.LocalStorage -> R.string.draft_storage_failed
 }

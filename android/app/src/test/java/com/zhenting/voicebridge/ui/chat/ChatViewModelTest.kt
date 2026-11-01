@@ -7,6 +7,7 @@ import com.zhenting.voicebridge.data.model.*
 import com.zhenting.voicebridge.data.remote.ApiException
 import com.zhenting.voicebridge.data.remote.ApiIssue
 import com.zhenting.voicebridge.data.repository.ChatRepository
+import com.zhenting.voicebridge.data.local.RecoveryStore
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -22,9 +23,9 @@ class ChatViewModelTest {
     @get:Rule val dispatcher = MainDispatcherRule()
     private val stores = mutableListOf<ViewModelStore>()
     @After fun tearDown() { stores.forEach { it.clear() } }
-    private fun model(repo: FakeChat): ChatViewModel {
+    private fun model(repo: FakeChat, recovery: RecoveryStore = RecoveryStore()): ChatViewModel {
         val store = ViewModelStore().also { stores.add(it) }
-        return ViewModelProvider(store, ChatViewModel.factory(repo))[ChatViewModel::class.java]
+        return ViewModelProvider(store, ChatViewModel.factory(repo, recovery))[ChatViewModel::class.java]
     }
 
     @Test
@@ -60,6 +61,41 @@ class ChatViewModelTest {
         model.newConversation()
         assertFalse(model.uiState.value.requiresReload)
         assertEquals("Keep me", model.uiState.value.draft)
+    }
+
+    @Test
+    fun composerRestoresItsQuestionAndSelectedMemosWithoutSending() = runTest {
+        val recovery = RecoveryStore()
+        val repo = FakeChat()
+        val original = model(repo, recovery)
+        val context = listOf(MemoContext("m-1", "Reference note", "date"))
+        original.editDraft("Unsent question"); original.startWithMemos(context)
+        stores.last().clear()
+        val restored = model(repo, recovery)
+        assertEquals("Unsent question", restored.uiState.value.draft)
+        assertEquals(context, restored.uiState.value.memoContext)
+        assertTrue(repo.sentTo.isEmpty())
+        restored.send(); advanceUntilIdle()
+        stores.last().clear()
+        val afterSend = model(repo, recovery)
+        advanceUntilIdle()
+        assertEquals("", afterSend.uiState.value.draft)
+        assertEquals("c-1", afterSend.uiState.value.conversationId)
+    }
+
+    @Test
+    fun interruptedNewConversationCannotSilentlyResendOnRestoration() = runTest {
+        val recovery = RecoveryStore()
+        val repo = FakeChat().apply { gate = CompletableDeferred() }
+        val original = model(repo, recovery)
+        original.editDraft("Possibly sent"); original.send(); runCurrent()
+        stores.last().clear()
+        val restored = model(repo, recovery)
+        assertEquals("Possibly sent", restored.uiState.value.draft)
+        assertTrue(restored.uiState.value.requiresReload)
+        assertEquals(ApiIssue.SaveUnconfirmed, restored.uiState.value.error)
+        restored.send(); runCurrent()
+        assertEquals(1, repo.sentTo.size)
     }
 
     @Test
@@ -116,9 +152,73 @@ class ChatViewModelTest {
         assertTrue(model.uiState.value.memoContext.isEmpty())
     }
 
+    @Test
+    fun quickActionsSendThePreparedQuestionOnceAndAskLeavesTheQuestionForTheUser() = runTest {
+        val memo = MemoContext("m-1", "Report due Friday", "date", "Project")
+        val repo = FakeChat().apply { gate = CompletableDeferred() }
+        val model = model(repo)
+        assertTrue(model.startMemoAction(memo, MemoAction.Summary))
+        assertFalse(model.startMemoAction(memo, MemoAction.Todos))
+        runCurrent()
+        assertEquals(listOf(MemoAction.Summary), repo.sentActions)
+        assertEquals(listOf(MemoAction.Summary.prompt), repo.prompts)
+        assertEquals(listOf(listOf("m-1")), repo.sentMemoIds)
+        repo.gate!!.complete(Unit); advanceUntilIdle()
+        model.editDraft("What is the deadline?")
+        assertTrue(model.startMemoAction(memo, MemoAction.Ask))
+        assertEquals("What is the deadline?", model.uiState.value.draft)
+        assertEquals(1, repo.sentTo.size)
+        model.send(); advanceUntilIdle()
+        assertEquals(listOf(MemoAction.Summary, MemoAction.Ask), repo.sentActions)
+    }
+
+    @Test
+    fun automaticActionsRequireExplicitReplacementOfAnUnsentDraft() = runTest {
+        val repo = FakeChat()
+        val model = model(repo)
+        model.editDraft("Unsent question")
+        val memo = MemoContext("m-1", "Note", "date")
+        assertFalse(model.startMemoAction(memo, MemoAction.Bilingual))
+        assertEquals("Unsent question", model.uiState.value.draft)
+        assertTrue(repo.sentTo.isEmpty())
+        assertTrue(model.startMemoAction(memo, MemoAction.Bilingual, replaceDraft = true))
+        advanceUntilIdle()
+        assertEquals(listOf(MemoAction.Bilingual.prompt), repo.prompts)
+    }
+
+    @Test
+    fun anInterruptedQuickActionRestoresWithoutAutomaticallySendingAgain() = runTest {
+        val recovery = RecoveryStore()
+        val repo = FakeChat().apply { gate = CompletableDeferred() }
+        val original = model(repo, recovery)
+        original.startMemoAction(MemoContext("m-1", "Note", "date"), MemoAction.Todos)
+        runCurrent(); stores.last().clear()
+        val restored = model(repo, recovery)
+        runCurrent()
+        assertEquals(MemoAction.Todos, restored.uiState.value.memoAction)
+        assertEquals(MemoAction.Todos.prompt, restored.uiState.value.draft)
+        assertTrue(restored.uiState.value.requiresReload)
+        assertEquals(1, repo.sentTo.size)
+    }
+
+    @Test
+    fun editingAPreparedActionTurnsItIntoAnOrdinaryQuestionAboutTheNote() = runTest {
+        val recovery = RecoveryStore()
+        val repo = FakeChat().apply { failure = ApiException(ApiIssue.Unavailable) }
+        val model = model(repo, recovery)
+        model.startMemoAction(MemoContext("m-1", "Note", "date"), MemoAction.Summary)
+        advanceUntilIdle()
+        model.editDraft("A different question")
+        assertNull(model.uiState.value.memoAction)
+        assertNull(recovery.snapshot.chat.memoAction)
+        assertEquals(listOf("m-1"), model.uiState.value.memoContext.map { it.id })
+    }
+
     private class FakeChat : ChatRepository {
         val sentTo = mutableListOf<String?>()
         val sentMemoIds = mutableListOf<List<String>>()
+        val sentActions = mutableListOf<MemoAction?>()
+        val prompts = mutableListOf<String>()
         var context = emptyList<MemoContext>()
         var gate: CompletableDeferred<Unit>? = null
         var failure: ApiException? = null
@@ -129,7 +229,8 @@ class ChatViewModelTest {
         }
         override suspend fun messages(conversationId: String) = ConversationContent(listOf(
             ChatMessage(100, MessageRole.Assistant, "Earlier reply", "date")), context)
-        override suspend fun send(message: String, conversationId: String?, memoIds: List<String>): ChatTurn {
+        override suspend fun send(message: String, conversationId: String?, memoIds: List<String>, memoAction: MemoAction?): ChatTurn {
+            sentActions.add(memoAction); prompts.add(message)
             sentTo.add(conversationId)
             sentMemoIds.add(memoIds)
             if (memoIds.isNotEmpty()) context = memoIds.map { MemoContext(it, "Attached $it", "date") }

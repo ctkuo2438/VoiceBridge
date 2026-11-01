@@ -17,6 +17,8 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.isDialog
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -31,6 +33,8 @@ import com.zhenting.voicebridge.ui.home.HomeMode
 import com.zhenting.voicebridge.ui.home.HomeScreen
 import com.zhenting.voicebridge.ui.memo.MemoScreen
 import com.zhenting.voicebridge.ui.memo.MemoUiState
+import com.zhenting.voicebridge.ui.memo.MemoEditUiState
+import com.zhenting.voicebridge.data.local.MemoEditDraft
 import com.zhenting.voicebridge.ui.speech.SpeechInput
 import com.zhenting.voicebridge.ui.speech.SpeechTarget
 import com.zhenting.voicebridge.ui.speech.SpeechUiState
@@ -62,7 +66,12 @@ class UiAppearanceTest {
                 }
             }
         }
-        val cases = if (stage == "journey") mutableListOf(
+        val cases = if (stage == "memo-actions") mutableListOf(
+            Triple("memo-history", false, 1f), Triple("memo-history", true, 1f), Triple("memo-history", false, 1.5f),
+            Triple("chat-sources", false, 1f), Triple("chat-sources", true, 1f), Triple("chat-sources", false, 1.5f),
+            Triple("chat-sources-dialog", false, 1f), Triple("chat-sources-dialog", true, 1f),
+            Triple("chat-sources-dialog", false, 1.5f)
+        ) else if (stage == "journey") mutableListOf(
             Triple("auth", false, 1f), Triple("auth-verifying", false, 1f),
             Triple("chat-empty", false, 1f), Triple("chat-recording", false, 1f),
             Triple("chat-transcribing", false, 1f), Triple("chat-review", false, 1f),
@@ -75,24 +84,36 @@ class UiAppearanceTest {
             Triple("memo-tts-generating", false, 1f), Triple("memo-tts-preparing", false, 1f), Triple("memo-tts-playing", false, 1f)
         ) else mutableListOf(
             Triple("auth", false, 1f), Triple("chat-empty", false, 1f),
-            Triple("chat", false, 1f), Triple("memo", false, 1f), Triple("memo-history", false, 1f)
+            Triple("chat", false, 1f), Triple("memo", false, 1f), Triple("memo-history", false, 1f),
+            Triple("memo-edit", false, 1f)
         )
-        if (stage != "before" && stage != "journey") cases.addAll(listOf(
+        if (stage !in setOf("before", "journey", "memo-actions")) cases.addAll(listOf(
             Triple("chat", true, 1f), Triple("memo-history", true, 1f),
+            Triple("memo-edit", true, 1f), Triple("memo-edit", false, 1.5f),
             Triple("auth", false, 1.5f), Triple("chat", false, 1.5f), Triple("memo-history", false, 1.5f)
         ))
         for ((name, isDark, fontScale) in cases) {
             compose.runOnIdle { scene = name; dark = isDark; scale = fontScale }
             compose.waitForIdle()
             if (name in setOf("memo-history", "memo-selected", "memo-tts-generating", "memo-tts-preparing", "memo-tts-playing")) {
-                compose.onNodeWithTag("memo_list").performScrollToNode(hasTestTag("memo_morning"))
+                compose.onNodeWithTag("memo_list").performScrollToNode(hasTestTag(
+                    if (stage == "memo-actions") "memo_action_ask_morning" else "memo_morning"))
+                compose.waitForIdle()
+            }
+            if (name.startsWith("chat-sources")) {
+                compose.onNodeWithTag("chat_messages").performScrollToNode(hasTestTag("source_2_morning_p1"))
+                if (name.endsWith("-dialog")) compose.onNodeWithTag("source_2_morning_p1").performClick()
                 compose.waitForIdle()
             }
             // Journey screenshots include platform dialog windows as well as the app background.
-            val screenshot = if (stage == "journey") {
-                android.os.SystemClock.sleep(300)
-                instrumentation.uiAutomation.takeScreenshot()
-            } else compose.onRoot().captureToImage().asAndroidBitmap()
+            val screenshot = when {
+                name == "memo-edit" || name == "chat-sources-dialog" -> compose.onNode(isDialog()).captureToImage().asAndroidBitmap()
+                stage == "journey" -> {
+                    android.os.SystemClock.sleep(300)
+                    instrumentation.uiAutomation.takeScreenshot()
+                }
+                else -> compose.onRoot().captureToImage().asAndroidBitmap()
+            }
             val suffix = if (isDark) "dark" else "light"
             val filename = "$name-$suffix-${(fontScale * 100).toInt()}.png"
             File(output, filename).outputStream().use { screenshot.compress(Bitmap.CompressFormat.PNG, 100, it) }
@@ -136,13 +157,17 @@ class UiAppearanceTest {
                     {}, {}, {}, {}, {}, {}, true)
             }) {
             if (mode == HomeMode.Chat) {
+                val grounded = scene.startsWith("chat-sources")
+                val answer = if (grounded) "• Take a morning walk.\n• Review class notes over coffee."
+                    else if (scene == "chat-memos-reply") "Review your notes before class tomorrow, then plan a trail walk and take photos on the weekend."
+                    else "Start with a morning walk, make time for a hobby, and keep Sunday evening free to recharge."
                 val messages = if (scene in setOf("chat-empty", "chat-recording", "chat-transcribing", "chat-review", "chat-draft", "chat-sending", "chat-memos")) emptyList() else listOf(
-                    ChatMessage(1, MessageRole.User, if (scene == "chat-memos-reply") "Help me make a plan from these notes."
+                    ChatMessage(1, MessageRole.User, if (grounded) MemoAction.Summary.prompt
+                        else if (scene == "chat-memos-reply") "Help me make a plan from these notes."
                         else "Can you help me plan a relaxed weekend?", "2026-10-29T09:00:00Z"),
-                    ChatMessage(2, MessageRole.Assistant,
-                        if (scene == "chat-memos-reply") "Review your notes before class tomorrow, then plan a trail walk and take photos on the weekend."
-                        else "Start with a morning walk, make time for a hobby, and keep Sunday evening free to recharge.",
-                        "2026-10-29T09:01:00Z")
+                    ChatMessage(2, MessageRole.Assistant, answer, "2026-10-29T09:01:00Z",
+                        if (grounded) listOf(AnswerSection(answer, AnswerKind.Note,
+                            listOf(MemoSource("morning", memos.first().title, "p1", memos.first().prompt)))) else emptyList())
                 )
                 ChatScreen(ChatUiState(conversationId = if (messages.isEmpty()) null else "preview",
                     title = if (messages.isEmpty()) null else "Weekend inspiration", messages = messages,
@@ -151,10 +176,13 @@ class UiAppearanceTest {
                         "chat-memos" -> "Help me make a plan from these notes."
                         else -> ""
                     }, isSending = scene == "chat-sending",
-                    memoContext = if (scene.startsWith("chat-memos")) memos.map { it.asContext() } else emptyList()),
+                    memoContext = if (grounded || scene.startsWith("chat-memos")) memos.map { it.asContext() } else emptyList()),
                     {}, {}, {}, {}, {}, {}, {}, {}, ttsState = playback)
             } else {
                 MemoScreen(MemoUiState(memos = memos,
+                    draftTitle = if (scene in setOf("memo-draft", "memo-confirm", "memo-saving")) "Class preparation" else "",
+                    editing = if (scene == "memo-edit") MemoEditUiState(MemoEditDraft(memos.first(),
+                        title = "Project meeting · 專題討論", text = "Review the user interviews on Friday.\n\n整理訪談重點，再決定下一版的功能範圍。")) else null,
                     draft = if (scene in setOf("memo-draft", "memo-confirm", "memo-saving")) "Tomorrow I will review my notes before class." else "",
                     confirmation = if (scene == "memo-confirm") "Tomorrow I will review my notes before class." else null,
                     isSaving = scene == "memo-saving",

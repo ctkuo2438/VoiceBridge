@@ -5,6 +5,6 @@ import com.zhenting.voicebridge.data.AppContainer
 
 class VoiceBridgeApplication : Application() {
     val container: AppContainer by lazy {
-        AppContainer(BuildConfig.API_BASE_URL)
+        AppContainer(BuildConfig.API_BASE_URL, java.io.File(noBackupFilesDir, "recovery"))
     }
 }

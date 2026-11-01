@@ -59,7 +59,8 @@ CREATE TABLE IF NOT EXISTS messages (
     role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
     content TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    api_items TEXT
+    api_items TEXT,
+    sections_json TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, id);
@@ -69,7 +70,10 @@ CREATE TABLE IF NOT EXISTS memos (
     user_id TEXT NOT NULL REFERENCES users(id),
     request_id TEXT,
     prompt TEXT NOT NULL CHECK(length(trim(prompt)) > 0),
+    title TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT '',
+    version INTEGER NOT NULL DEFAULT 0,
     sheet_status TEXT NOT NULL DEFAULT 'pending'
         CHECK(sheet_status IN ('pending', 'saved', 'unconfirmed')),
     sheet_result TEXT,
@@ -83,6 +87,7 @@ CREATE TABLE IF NOT EXISTS conversation_memos (
     memo_id TEXT NOT NULL,
     prompt TEXT NOT NULL,
     memo_created_at TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
     position INTEGER NOT NULL,
     PRIMARY KEY (conversation_id, memo_id),
     UNIQUE(conversation_id, position)
@@ -116,6 +121,30 @@ def init_db(app):
         connection = get_db()
         connection.execute("PRAGMA journal_mode = WAL")
         connection.executescript(SCHEMA)
+        # Upgrade existing libraries in place; retain IDs, ownership, request IDs and chat snapshots.
+        with connection:
+            connection.execute("BEGIN IMMEDIATE")
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(memos)")}
+            for name, definition in (
+                ("title", "TEXT NOT NULL DEFAULT ''"),
+                ("updated_at", "TEXT NOT NULL DEFAULT ''"),
+                ("version", "INTEGER NOT NULL DEFAULT 0"),
+            ):
+                if name not in columns:
+                    connection.execute(f"ALTER TABLE memos ADD COLUMN {name} {definition}")
+            for row in connection.execute("SELECT * FROM memos WHERE title = '' OR updated_at = ''").fetchall():
+                connection.execute(
+                    "UPDATE memos SET title = ?, updated_at = ? WHERE id = ?",
+                    (row["title"] or default_memo_title(row["prompt"]), row["updated_at"] or row["created_at"], row["id"]),
+                )
+            connection.execute("CREATE INDEX IF NOT EXISTS idx_memos_user_updated ON memos(user_id, updated_at DESC)")
+            if "sections_json" not in {row["name"] for row in connection.execute("PRAGMA table_info(messages)")}:
+                connection.execute("ALTER TABLE messages ADD COLUMN sections_json TEXT")
+            if "title" not in {row["name"] for row in connection.execute("PRAGMA table_info(conversation_memos)")}:
+                connection.execute("ALTER TABLE conversation_memos ADD COLUMN title TEXT NOT NULL DEFAULT ''")
+            for row in connection.execute("SELECT conversation_id, memo_id, prompt FROM conversation_memos WHERE title = ''").fetchall():
+                connection.execute("UPDATE conversation_memos SET title = ? WHERE conversation_id = ? AND memo_id = ?",
+                    (default_memo_title(row["prompt"]), row["conversation_id"], row["memo_id"]))
 
 
 # JOIN users: The session must correspond to a user and must not have expired
@@ -167,10 +196,13 @@ def conversation_history(conversation_id: str, max_messages: int = 100):
 
 
 def public_message(row):
-    return {key: row[key] for key in ("id", "role", "content", "created_at")}
+    result = {key: row[key] for key in ("id", "role", "content", "created_at")}
+    if row["sections_json"]:
+        result["sections"] = json.loads(row["sections_json"])
+    return result
 
 
-def save_turn(chat_session, existing, message: str, reply: str, api_items: str, memo_context=None):
+def save_turn(chat_session, existing, message: str, reply: str, api_items: str, memo_context=None, *, reply_sections=None, title=None):
     """Commit both messages together after OpenAI finishes; never hold a lock during the API call."""
     connection = get_db()
     conversation_id = existing["id"] if existing is not None else str(uuid4())
@@ -201,7 +233,7 @@ def save_turn(chat_session, existing, message: str, reply: str, api_items: str, 
                     conversation_id,
                     chat_session["id"],
                     chat_session["user_id"],
-                    message[:80],
+                    (title or message)[:80],
                     timestamp,
                     timestamp,
                 ),
@@ -209,9 +241,10 @@ def save_turn(chat_session, existing, message: str, reply: str, api_items: str, 
         ids = []
         for role, content, items in (("user", message, None), ("assistant", reply, api_items)):
             inserted = connection.execute(
-                """INSERT INTO messages (conversation_id, role, content, created_at, api_items)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (conversation_id, role, content, timestamp, items),
+                """INSERT INTO messages (conversation_id, role, content, created_at, api_items, sections_json)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (conversation_id, role, content, timestamp, items,
+                    json.dumps(reply_sections, ensure_ascii=False) if role == "assistant" and reply_sections else None),
             )
             ids.append(inserted.lastrowid)
         rows = connection.execute(
@@ -221,9 +254,9 @@ def save_turn(chat_session, existing, message: str, reply: str, api_items: str, 
             # Snapshots remain usable if a source memo is later changed or removed.
             connection.executemany(
                 """INSERT INTO conversation_memos
-                   (conversation_id, memo_id, prompt, memo_created_at, position)
-                   VALUES (?, ?, ?, ?, ?)""",
-                [(conversation_id, memo["id"], memo["prompt"], memo["created_at"], position)
+                   (conversation_id, memo_id, prompt, memo_created_at, title, position)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                [(conversation_id, memo["id"], memo["prompt"], memo["created_at"], memo["title"], position)
                  for position, memo in enumerate(memo_context)],
             )
     return conversation_id, [public_message(row) for row in rows]
@@ -266,19 +299,28 @@ def delete_conversation(conversation_id: str, user_id: str):
 
 
 def public_memo(row):
-    return {key: row[key] for key in ("id", "prompt", "created_at", "sheet_status")}
+    memo = {key: row[key] for key in ("id", "title", "prompt", "created_at", "updated_at", "version", "sheet_status")}
+    memo["sheet_outdated"] = bool(row["sheet_result"] and
+        json.loads(row["sheet_result"]).get("code") == "sheets_copy_outdated")
+    return memo
 
 
-def create_memo(user_id: str, prompt: str, request_id: str | None = None):
+def default_memo_title(prompt: str) -> str:
+    return prompt.strip().replace("\r", "\n").split("\n", 1)[0].strip()[:80]
+
+
+def create_memo(user_id: str, prompt: str, request_id: str | None = None, *, title: str | None = None):
     """Commit the note before contacting Sheets; repeated request IDs reuse one note."""
     connection = get_db()
     memo_id = str(uuid4())
+    title = (title or "").strip() or default_memo_title(prompt)
+    timestamp = utc_now()
     with connection:
         inserted = connection.execute(
-            """INSERT INTO memos (id, user_id, request_id, prompt, created_at)
-               VALUES (?, ?, ?, ?, ?)
+            """INSERT INTO memos (id, user_id, request_id, title, prompt, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(user_id, request_id) DO NOTHING""",
-            (memo_id, user_id, request_id, prompt, utc_now()),
+            (memo_id, user_id, request_id, title, prompt, timestamp, timestamp),
         )
         if inserted.rowcount == 1:
             row = connection.execute("SELECT * FROM memos WHERE id = ?", (memo_id,)).fetchone()
@@ -287,18 +329,18 @@ def create_memo(user_id: str, prompt: str, request_id: str | None = None):
             "SELECT * FROM memos WHERE user_id = ? AND request_id = ?",
             (user_id, request_id),
         ).fetchone()
-        if row is None or row["prompt"] != prompt:
+        if row is None or row["prompt"] != prompt or row["title"] != title:
             raise ApiError(409, "memo_request_conflict", "This request ID belongs to a different memo.")
         return row, False
 
 
-def save_memo_sheet_result(memo_id: str, user_id: str, result: dict):
+def save_memo_sheet_result(memo_id: str, user_id: str, result: dict, *, expected_prompt: str):
     connection = get_db()
     status = "saved" if result.get("saved") is True else "unconfirmed"
     with connection:
         connection.execute(
-            "UPDATE memos SET sheet_status = ?, sheet_result = ? WHERE id = ? AND user_id = ?",
-            (status, json.dumps(result), memo_id, user_id),
+            "UPDATE memos SET sheet_status = ?, sheet_result = ? WHERE id = ? AND user_id = ? AND prompt = ?",
+            (status, json.dumps(result), memo_id, user_id, expected_prompt),
         )
         return connection.execute(
             "SELECT * FROM memos WHERE id = ? AND user_id = ?", (memo_id, user_id)
@@ -307,10 +349,37 @@ def save_memo_sheet_result(memo_id: str, user_id: str, result: dict):
 
 def list_memos(user_id: str):
     rows = get_db().execute(
-        "SELECT * FROM memos WHERE user_id = ? ORDER BY created_at DESC, rowid DESC",
+        "SELECT * FROM memos WHERE user_id = ? ORDER BY updated_at DESC, created_at DESC, rowid DESC",
         (user_id,),
     ).fetchall()
     return [public_memo(row) for row in rows]
+
+
+def update_memo(user_id: str, memo_id: str, *, title: str, prompt: str, version: int):
+    connection = get_db()
+    with connection:
+        connection.execute("BEGIN IMMEDIATE")
+        row = connection.execute("SELECT * FROM memos WHERE id = ? AND user_id = ?", (memo_id, user_id)).fetchone()
+        if row is None:
+            raise ApiError(404, "memo_not_found", "Memo was not found.")
+        same_content = row["title"] == title and row["prompt"] == prompt
+        if row["version"] != version:
+            # An explicit retry after a lost response can confirm the same completed update.
+            if same_content and row["version"] == version + 1:
+                return row
+            raise ApiError(409, "memo_changed", "This memo changed. Reload it before updating.")
+        if same_content:
+            return row
+        body_changed = row["prompt"] != prompt
+        sheet_result = json.dumps({"saved": False, "code": "sheets_copy_outdated",
+            "error": "The Google Sheets copy contains an earlier version of this memo."}) if body_changed else row["sheet_result"]
+        connection.execute(
+            """UPDATE memos SET title = ?, prompt = ?, updated_at = ?, version = version + 1,
+               sheet_status = ?, sheet_result = ? WHERE id = ? AND user_id = ? AND version = ?""",
+            (title, prompt, utc_now(), "unconfirmed" if body_changed else row["sheet_status"],
+             sheet_result, memo_id, user_id, version),
+        )
+        return connection.execute("SELECT * FROM memos WHERE id = ? AND user_id = ?", (memo_id, user_id)).fetchone()
 
 
 def get_memos_for_chat(user_id: str, memo_ids: list[str]):
@@ -318,7 +387,7 @@ def get_memos_for_chat(user_id: str, memo_ids: list[str]):
         return []
     placeholders = ",".join("?" for _ in memo_ids)
     rows = get_db().execute(
-        f"SELECT id, prompt, created_at FROM memos WHERE user_id = ? AND id IN ({placeholders})",
+        f"SELECT id, title, prompt, created_at FROM memos WHERE user_id = ? AND id IN ({placeholders})",
         (user_id, *memo_ids),
     ).fetchall()
     by_id = {row["id"]: dict(row) for row in rows}
@@ -330,7 +399,7 @@ def get_memos_for_chat(user_id: str, memo_ids: list[str]):
 def conversation_memo_context(conversation_id: str, user_id: str):
     get_conversation(conversation_id, user_id)
     rows = get_db().execute(
-        """SELECT memo_id AS id, prompt, memo_created_at AS created_at
+        """SELECT memo_id AS id, title, prompt, memo_created_at AS created_at
            FROM conversation_memos WHERE conversation_id = ? ORDER BY position""",
         (conversation_id,),
     ).fetchall()

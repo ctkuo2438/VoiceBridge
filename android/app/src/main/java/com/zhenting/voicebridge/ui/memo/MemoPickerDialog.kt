@@ -79,6 +79,7 @@ fun MemoPickerDialog(
                                 }).padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
                             Checkbox(checked, onCheckedChange = null, enabled = canSelect)
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(memo.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 Text(memo.prompt, maxLines = 3, overflow = TextOverflow.Ellipsis)
                                 Text(displayTimestamp(memo.createdAt), style = MaterialTheme.typography.bodySmall)
                                 if (chatCharacterCount(memo.prompt) > MAX_MEMO_CONTEXT_CHARACTERS) {

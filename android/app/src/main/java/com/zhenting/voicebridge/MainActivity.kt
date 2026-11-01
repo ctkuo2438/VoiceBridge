@@ -42,7 +42,7 @@ class MainActivity : ComponentActivity() {
                     factory = AuthViewModel.factory(container.authRepository)
                 )
                 val workspaceViewModel: WorkspaceViewModel = viewModel(
-                    factory = WorkspaceViewModel.factory(container.authRepository)
+                    factory = WorkspaceViewModel.factory(container.authRepository, container::recoveryStore)
                 )
                 val connectionViewModel: ConnectionViewModel = viewModel(
                     factory = ConnectionViewModel.factory(container.healthRepository)
@@ -82,7 +82,8 @@ class MainActivity : ComponentActivity() {
                                     onDismissAuthError = authViewModel::dismissError,
                                     modifier = contentModifier,
                                     createSpeechRepository = container::speechRepository,
-                                    createAudioRecorder = { AndroidAudioRecorder(audioContext) },
+                                    createAudioRecorder = { userId -> AndroidAudioRecorder(audioContext,
+                                        java.io.File(container.recoveryDirectory(userId), "audio")) },
                                     createTtsRepository = container::ttsRepository,
                                     createAudioPlayer = { AndroidAudioPlayer(audioContext) }
                                 )

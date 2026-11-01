@@ -17,17 +17,15 @@ interface AudioRecorder {
     fun cancel()
 }
 
-/** Records mono AAC in an M4A container inside the app's private cache. */
-class AndroidAudioRecorder(context: Context) : AudioRecorder {
+/** Records mono AAC in an M4A container in an app-private directory. */
+class AndroidAudioRecorder(context: Context, private val directory: File = File(context.cacheDir, "voice-recordings")) : AudioRecorder {
     private val appContext = context.applicationContext
-    private val directory = File(appContext.cacheDir, "voice-recordings")
     private var recorder: MediaRecorder? = null
     private var output: File? = null
 
     init {
         directory.mkdirs()
-        // Remove recordings left by an interrupted app process.
-        directory.listFiles()?.filter { it.extension == "m4a" }?.forEach { it.delete() }
+        // RecoveryStore removes unregistered scratch files after loading the account's pending clip.
     }
 
     @Suppress("DEPRECATION")

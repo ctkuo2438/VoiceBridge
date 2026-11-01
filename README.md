@@ -9,8 +9,9 @@ VoiceBridge supports Google sign-in, speech-to-text, chat and translation, persi
 - **Google sign-in:** Authenticate with Google and receive a separate Flask-signed app access JWT.
 - **Speech-to-text:** Record audio, transcribe it through Flask, and review or edit the recognized text.
 - **Chat and translation:** Send typed or transcribed messages and continue saved conversations.
-- **Voice Memos:** Save reviewed text and browse personal Memo history.
-- **Memos to Chat:** Select one or multiple saved Memos as reference material for a new conversation.
+- **Memo library:** Save titled notes, edit saved Memos, and search personal titles and contents.
+- **Recoverable input:** Retry a failed transcription from the same recording, and restore unfinished text drafts on this device after signing back into the same account.
+- **Memos to Chat:** Summarize a note, extract action items, create Chinese-English key points, or ask a question, with sources linked to saved note paragraphs. Multiple notes can also be selected for a conversation.
 - **Google Sheets logging:** Record submitted user prompts with their timestamp, session ID, and mode.
 - **Read aloud:** Play saved Memos and AI replies using Gemini TTS through Flask, with generation status and stop controls.
 
@@ -32,7 +33,7 @@ Download or open the HTML files locally in a browser to view the diagrams and in
 | Authentication | Android Credential Manager, Google ID tokens, Flask-signed JWTs |
 | Backend | Python, Flask |
 | AI | OpenAI Audio Transcriptions API and Responses API; Gemini TTS |
-| Persistence | SQLite |
+| Persistence | SQLite (backend), Jetpack DataStore (local draft recovery) |
 | Prompt logging | Google Sheets API |
 | Python environment | uv |
 
@@ -66,10 +67,34 @@ session so signing out immediately revokes access.
 
 ### Voice Memo
 
-Record → transcribe → review or edit → confirm save.
+Record → transcribe → review or edit → optionally add a title → confirm save.
 
 Flask saves the Memo in SQLite, then attempts to copy its text to Google Sheets.
-The saved note appears in the user's Memo history, newest first.
+The saved note appears in the user's Memo history, most recently updated first.
+
+### Memo Library
+
+The existing **Chat / Memo** tabs remain. In Memo mode:
+
+- Add an optional title of up to 120 Unicode characters. A blank title uses the
+  first line of the note, limited to 80 characters, without an AI request.
+- Search titles and note contents by keyword. Matching is case-insensitive and
+  runs immediately over the user's loaded library; clearing the search restores
+  the complete list and retains selected Memos.
+- Tap **Edit memo** on a saved note to change its title or content, then tap
+  **Save changes**. This updates the same Memo and keeps its creation timestamp.
+  The unfinished new-Memo composer remains separate from saved-Memo edits.
+- Saved-Memo edit drafts are also recovered locally. **Cancel** discards those
+  edits. An uncertain update can retry the same changes; a version conflict asks
+  the user to reload the saved version before editing again.
+
+Existing conversations continue using the Memo snapshots saved when they started.
+New conversations use the current contents of their selected Memos. Updating a
+Memo's body leaves the earlier Google Sheet copy unchanged and marks it as
+outdated in the app. Renaming a title alone does not invalidate the copied body.
+
+Restarting Flask upgrades existing Memo tables in place, filling titles and
+update timestamps without resetting notes, user ownership, request IDs, or chats.
 
 ### Voice or Text Chat
 
@@ -80,13 +105,68 @@ same `conversation_id` to retain conversation context.
 
 ### Memos to Chat
 
-Select saved Memos → start a new Chat → add a question → Send.
+Each saved Memo offers four actions:
+
+- **Key points:** Start a new Chat and summarize the note.
+- **Action items:** Extract explicit tasks, keeping owners and deadlines only when stated.
+- **Chinese / English:** Create concise bilingual key points in aligned pairs.
+- **Ask this note:** Attach the note to a new Chat, preserving the current question;
+  edit the question and press **Send** when ready.
+
+The first three actions send a prepared question automatically. If Chat already has
+an unsent question, the app asks before replacing it. Cancelling keeps the draft.
+Free Chat remains available, and users can still select up to 10 Memos together.
 
 Flask verifies that the selected Memos belong to the current user.
-It saves Memo snapshots with the conversation, so reopening the Chat
-restores the reference material used at the start.
+It saves their titles and text as conversation snapshots. Answers based on notes
+include **Sources** buttons. Tap a source to see the associated answer text, the
+exact original paragraph, and the full saved note. Later edits to a Memo do not
+change earlier conversations or their references. Follow-up answers use the same
+saved reference material.
+
+Note-based replies use [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses).
+Flask validates the returned note and paragraph IDs, then fills excerpts from the
+saved references; the model cannot supply its own quote. General suggestions and
+missing information are labeled. These checks verify the source exists and the
+excerpt matches; users can review the cited paragraph to assess the answer.
+Free Chat continues using ordinary text replies. The configured OpenAI model must
+support the Responses API's strict JSON schema format for note-based replies.
+
+Restarting Flask adds the answer-source and snapshot-title columns without
+resetting existing notes or conversations. Older messages remain readable.
 
 Google Sheets records the new question, without duplicating the attached notes.
+
+### Local Drafts and Transcription Recovery
+
+Chat drafts, Memo drafts, and edited speech-review text are automatically saved
+on this device with Jetpack DataStore. The UI distinguishes a pending local
+write, a completed local save, and a storage failure. These local drafts do not
+send a Chat message or create a Memo; users still choose **Send** or confirm **Save**.
+
+After a recording is stopped, its completed audio file is registered locally
+before transcription begins. A failed request keeps the file and offers
+**Retry transcription** and **Discard**. Retry uploads the same recording.
+Once recognized text is committed locally, the source audio is deleted. Accepting
+the text appends it to the intended draft and clears the speech review in one
+local transaction, so reopening cannot append the same text twice.
+
+Recovery files live in app-private, account-scoped `noBackupFilesDir` storage;
+they are excluded from Android cloud backup and device transfer. Signing out
+clears the in-memory workspace. Signing back into the same account restores its
+unfinished input; a different account gets a separate workspace. Uninstalling
+the app or clearing its storage removes these local drafts and recordings.
+
+App authentication is still held in memory, so a full process restart requires
+Google sign-in before local recovery is available. Recording while the app is
+in the foreground is unchanged: leaving the foreground during an ongoing recording
+cancels that unfinished recording. Completed recordings awaiting transcription
+and saved draft text survive a process restart.
+
+Memo recovery also retains the pending save request ID, allowing a retry after
+an uncertain response without creating a second Memo. Chat recovery retains the
+conversation and selected Memo context; an interrupted send requires checking
+the conversation or explicitly starting a new one before sending again.
 
 ### Read Aloud
 
@@ -247,12 +327,29 @@ The backend URL can be configured through the
 | GET | /conversations/{id}/messages | Load messages and attached Memo context |
 | POST | /memos | Save a Memo |
 | GET | /memos | List the user's Memos |
+| PUT | /memos/{id} | Update the signed-in user's Memo using its current version |
 
 Protected endpoints require:
 
 ```http
 Authorization: Bearer <Flask access JWT>
 ```
+
+Memo responses include `title`, `updated_at`, and `version`. `POST /memos`
+continues to accept a legacy `prompt` / `request_id` body, with an optional
+`title`. `PUT /memos/{id}` requires `title`, `prompt`, and the last loaded
+integer `version`. A stale edit returns `409 memo_changed`; an identical retry
+of the immediately completed update returns the same version without writing
+again. `sheet_status` retains its existing values; `sheet_outdated: true`
+identifies an earlier Sheet copy of edited content.
+
+`POST /chat` accepts optional `memo_ids` when starting a conversation and an
+optional `memo_action` (`summary`, `todos`, `bilingual`, or `ask`) with selected
+notes. Only memo IDs are accepted from Android; Flask loads the owned note text.
+Assistant messages may include `sections` with `text`, `kind`, and `sources`.
+Each source includes `memo_id`, `memo_title`, `paragraph_id`, and the server-filled
+`quote`. `GET /conversations/{id}/messages` returns the same sources and saved
+`memo_context` so clients can reopen the original references.
 
 ### Text-to-speech request
 

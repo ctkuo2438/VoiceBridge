@@ -29,8 +29,10 @@ class MemoApiTests(unittest.TestCase):
         ).start()
         self.addCleanup(patch.stopall)
 
-    def save(self, prompt="My memo", *, request_id=None, headers=None):
+    def save(self, prompt="My memo", *, request_id=None, headers=None, title=None):
         payload = {"prompt": prompt}
+        if title is not None:
+            payload["title"] = title
         if request_id is not None:
             payload["request_id"] = request_id
         return self.http.post("/memos", json=payload, headers=self.headers if headers is None else headers)
@@ -40,6 +42,115 @@ class MemoApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["Cache-Control"], "no-store")
         return json_payload(response)["memos"]
+
+    def update(self, memo, *, title="Revised title", prompt="Revised note", version=None, headers=None):
+        return self.http.put(f"/memos/{memo['id']}", headers=self.headers if headers is None else headers,
+            json={"title": title, "prompt": prompt, "version": memo["version"] if version is None else version})
+
+    def test_titles_are_trimmed_or_derived_and_retry_identity_includes_the_title(self):
+        memo = json_payload(self.save("First line\nSecond line", title="  Project notes  "))["memo"]
+        self.assertEqual(memo["title"], "Project notes")
+        self.assertEqual(memo["updated_at"], memo["created_at"])
+        self.assertEqual(memo["version"], 0)
+        generated = json_payload(self.save("  課後回顧 🌱\nMore details  "))["memo"]
+        self.assertEqual(generated["title"], "課後回顧 🌱")
+        self.assertEqual(len(json_payload(self.save("🌱" * 100))["memo"]["title"]), 80)
+        request_id = str(uuid4())
+        self.save(request_id=request_id, title="Original title")
+        self.assertEqual(self.save(request_id=request_id, title="Different title").status_code, 409)
+
+    def test_edit_updates_the_same_memo_and_an_explicit_retry_does_not_increment_again(self):
+        memo = json_payload(self.save())["memo"]
+        response = self.update(memo, title="  New title  ", prompt="  Revised note  ")
+        self.assertEqual(response.status_code, 200)
+        updated = json_payload(response)["memo"]
+        self.assertEqual(updated["id"], memo["id"])
+        self.assertEqual(updated["title"], "New title")
+        self.assertEqual(updated["prompt"], "Revised note")
+        self.assertEqual(updated["created_at"], memo["created_at"])
+        self.assertEqual(updated["version"], 1)
+        self.assertEqual(updated["sheet_status"], "unconfirmed")
+        self.assertTrue(updated["sheet_outdated"])
+        repeated = self.update(memo, title="New title", prompt="Revised note")
+        self.assertEqual(repeated.status_code, 200)
+        self.assertEqual(json_payload(repeated)["memo"], updated)
+        self.assertEqual(self.history(), [updated])
+        self.append.assert_called_once()
+
+    def test_a_stale_edit_cannot_overwrite_newer_content(self):
+        memo = json_payload(self.save())["memo"]
+        updated = json_payload(self.update(memo))["memo"]
+        response = self.update(memo, prompt="A stale overwrite")
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(json_payload(response)["code"], "memo_changed")
+        self.assertEqual(self.history(), [updated])
+        title_only = json_payload(self.update(updated, title="Another title", prompt=updated["prompt"]))["memo"]
+        self.assertEqual(title_only["version"], 2)
+        self.assertEqual(self.update(memo).status_code, 409)
+
+    def test_title_only_edit_keeps_the_existing_sheet_copy_status(self):
+        memo = json_payload(self.save())["memo"]
+        response = self.update(memo, title="Renamed", prompt=memo["prompt"])
+        self.assertEqual(json_payload(response)["memo"]["sheet_status"], "saved")
+        self.append.assert_called_once()
+
+    def test_invalid_titles_and_edits_are_rejected_without_writing(self):
+        for title in [7, [], "x" * 121]:
+            self.assertEqual(self.save(title=title).status_code, 400)
+        memo = json_payload(self.save(title="🌱" * 120))["memo"]
+        for patch_fields in [{"title": " "}, {"title": "x" * 121}, {"prompt": " "},
+                             {"version": -1}, {"version": True}, {"version": "0"}, {"version": None}, {"version": 2 ** 80}]:
+            data = {"title": "Changed", "prompt": "Changed note", "version": 0, **patch_fields}
+            self.assertEqual(self.http.put(f"/memos/{memo['id']}", json=data, headers=self.headers).status_code, 400)
+        self.assertEqual(self.history(), [memo])
+
+    def test_edits_require_ownership_and_an_active_login(self):
+        memo = json_payload(self.save())["memo"]
+        other = login_user(self.http, google_sub="other-editor")
+        other_headers = {"Authorization": f"Bearer {other['access_token']}"}
+        self.assertEqual(self.update(memo, headers=other_headers).status_code, 404)
+        self.assertEqual(self.update({**memo, "id": "missing"}).status_code, 404)
+        self.assertEqual(self.update(memo, headers={}).status_code, 401)
+        self.assertEqual(self.history(), [memo])
+
+    def test_a_late_sheet_result_cannot_mark_changed_content_as_synced(self):
+        def edit_while_copying(**_kwargs):
+            with self.app.app_context():
+                row = db.get_db().execute("SELECT * FROM memos").fetchone()
+                db.update_memo(self.login["user"]["id"], row["id"], title="Edited while copying",
+                    prompt="New content", version=0)
+            return {"updated_range": "Logs!A2:D2", "updated_rows": 1}
+        self.append.side_effect = edit_while_copying
+        response = self.save()
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(json_payload(response)["memo"]["sheet_status"], "unconfirmed")
+        self.assertTrue(json_payload(response)["memo"]["sheet_outdated"])
+        self.assertFalse(json_payload(response)["sheet"]["saved"])
+
+    def test_legacy_database_is_upgraded_in_place_and_the_migration_is_repeatable(self):
+        request_id = str(uuid4())
+        with self.app.app_context():
+            connection = db.get_db()
+            connection.execute("DROP TABLE memos")
+            connection.executescript("""CREATE TABLE memos (
+                id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), request_id TEXT,
+                prompt TEXT NOT NULL, created_at TEXT NOT NULL, sheet_status TEXT NOT NULL DEFAULT 'pending',
+                sheet_result TEXT, UNIQUE(user_id, request_id));""")
+            with connection:
+                connection.execute("INSERT INTO memos VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    ("legacy-note", self.login["user"]["id"], request_id, "原本的筆記\nDetails", "2026-10-01T10:00:00Z", "saved", '{"saved":true}'))
+        restarted = test_app(config={"DATABASE": self.app.config["DATABASE"]})
+        memos = self.history(http=restarted.test_client())
+        self.assertEqual(len(memos), 1)
+        self.assertEqual(memos[0]["id"], "legacy-note")
+        self.assertEqual(memos[0]["title"], "原本的筆記")
+        self.assertEqual(memos[0]["prompt"], "原本的筆記\nDetails")
+        self.assertEqual(memos[0]["created_at"], memos[0]["updated_at"])
+        self.assertEqual(memos[0]["version"], 0)
+        with restarted.app_context():
+            self.assertEqual(db.get_db().execute("SELECT request_id FROM memos").fetchone()[0], request_id)
+        again = test_app(config={"DATABASE": self.app.config["DATABASE"]}).test_client()
+        self.assertEqual(self.history(http=again), memos)
 
     def test_authenticated_notes_are_trimmed_owned_and_listed_newest_first(self):
         self.assertEqual(self.history(), [])

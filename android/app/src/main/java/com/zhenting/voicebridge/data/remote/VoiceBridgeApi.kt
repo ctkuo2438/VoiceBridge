@@ -4,6 +4,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Tag
 import retrofit2.http.Multipart
@@ -54,6 +55,13 @@ interface VoiceBridgeApi {
 
     @GET("memos")
     suspend fun getMemos(@Tag credentials: SessionCredentials): Response<MemosResponse>
+
+    @PUT("memos/{memoId}")
+    suspend fun updateMemo(
+        @Path("memoId") memoId: String,
+        @Body request: MemoUpdateRequest,
+        @Tag credentials: SessionCredentials
+    ): Response<MemoSaveResponse>
 
     @Multipart
     @POST("transcribe")

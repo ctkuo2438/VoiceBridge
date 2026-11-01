@@ -2,6 +2,8 @@ package com.zhenting.voicebridge
 
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -24,6 +26,9 @@ import com.zhenting.voicebridge.data.repository.SpeechRepository
 import com.zhenting.voicebridge.data.audio.AudioRecorder
 import com.zhenting.voicebridge.data.audio.AudioPlayer
 import com.zhenting.voicebridge.data.repository.TtsRepository
+import com.zhenting.voicebridge.data.local.RecoveryStore
+import com.zhenting.voicebridge.data.remote.ApiException
+import com.zhenting.voicebridge.data.remote.ApiIssue
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import androidx.test.platform.app.InstrumentationRegistry
@@ -52,11 +57,16 @@ class HomeScreenTest {
     private val readTexts = mutableListOf<Pair<String, String>>()
     private val player = FakePlayer()
     private var audioGate: CompletableDeferred<ByteArray>? = null
+    private val recoveryStores = mutableMapOf<String, RecoveryStore>()
+    private var transcriptionFailures = 0
+    private var transcriptionCalls = 0
 
     private fun start() {
         composeRule.setContent {
             val authModel: AuthViewModel = viewModel(factory = AuthViewModel.factory(auth))
-            val workspace: WorkspaceViewModel = viewModel(factory = WorkspaceViewModel.factory(auth))
+            val workspace: WorkspaceViewModel = viewModel(factory = WorkspaceViewModel.factory(auth) { id ->
+                recoveryStores.getOrPut(id) { RecoveryStore() }
+            })
             VoiceBridgeTheme {
                 AuthRoute(authModel, { "test-google-id-token" }, {},
                     signedInContent = { state, signOut, modifier ->
@@ -65,7 +75,14 @@ class HomeScreenTest {
                             { id -> memos.getOrPut(id) { FakeMemo() } },
                             signOut, authModel::dismissError, modifier,
                             createSpeechRepository = { object : SpeechRepository {
-                                override suspend fun transcribe(audio: File) = "Recognized speech"
+                                override suspend fun transcribe(audio: File): String {
+                                    transcriptionCalls++
+                                    if (transcriptionFailures > 0) {
+                                        transcriptionFailures--
+                                        throw SpeechException(SpeechIssue.Network)
+                                    }
+                                    return "Recognized speech"
+                                }
                             } },
                             createAudioRecorder = { FakeRecorder() },
                             createTtsRepository = { id -> object : TtsRepository {
@@ -101,6 +118,64 @@ class HomeScreenTest {
     }
 
     @Test
+    fun aMemoCanBeTitledEditedAndFoundByTitleOrContentWithoutCreatingAnotherNote() {
+        memos["a"] = FakeMemo().apply { records.add(Memo("other", "A grocery list", "date", SheetSaveStatus.Saved, "Shopping")) }
+        start()
+        composeRule.onNodeWithTag("memo_tab").performClick()
+        composeRule.onNodeWithTag("memo_title_input").performTextInput("Project planning")
+        composeRule.onNodeWithTag("memo_input").performScrollTo().performTextInput("Discuss the report")
+        composeRule.onNodeWithTag("save_memo_button").performScrollTo().performClick()
+        composeRule.onNodeWithTag("confirm_save_memo_button").performClick()
+        composeRule.onNodeWithTag("memo_list").performScrollToNode(hasTestTag("edit_memo_note-1"))
+        composeRule.onNodeWithTag("edit_memo_note-1").performClick()
+        composeRule.onNodeWithTag("memo_edit_title").performTextReplacement("Project launch")
+        composeRule.onNodeWithTag("memo_edit_text").performTextReplacement("Report due Friday")
+        composeRule.onNodeWithTag("memo_edit_save").performClick()
+        composeRule.runOnIdle {
+            val saved = memos.getValue("a").records.single { it.id == "note-1" }
+            assertEquals("Project launch", saved.title)
+            assertEquals("Report due Friday", saved.prompt)
+            assertEquals(1, saved.version)
+            assertEquals(2, memos.getValue("a").records.size)
+            assertEquals(1, memos.getValue("a").prompts.size)
+        }
+        for (query in listOf("PROJECT", "Friday")) {
+            composeRule.onNodeWithTag("memo_list").performScrollToNode(hasTestTag("memo_search_input"))
+            composeRule.onNodeWithTag("memo_search_input").performTextReplacement(query)
+            composeRule.onNodeWithTag("memo_list").performScrollToNode(hasTestTag("memo_note-1"))
+            composeRule.onNodeWithTag("memo_title_note-1").assertTextEquals("Project launch")
+            composeRule.onNodeWithTag("memo_other").assertDoesNotExist()
+        }
+        composeRule.onNodeWithTag("memo_list").performScrollToNode(hasTestTag("memo_search_input"))
+        composeRule.onNodeWithTag("memo_search_input").performTextReplacement("no matching phrase")
+        composeRule.onNodeWithTag("memo_list").performScrollToNode(hasTestTag("memo_search_empty"))
+        composeRule.onNodeWithTag("memo_search_empty").assertIsDisplayed()
+        composeRule.onNodeWithTag("memo_list").performScrollToNode(hasTestTag("memo_search_input"))
+        composeRule.onNodeWithTag("memo_clear_search").performClick()
+        composeRule.onNodeWithTag("memo_list").performScrollToNode(hasTestTag("memo_other"))
+        composeRule.onNodeWithTag("memo_other").assertIsDisplayed()
+    }
+
+    @Test
+    fun cancellingSavedMemoEditsPreservesTheOriginalAndTheUnfinishedNewMemo() {
+        val original = Memo("saved", "Original content", "date", SheetSaveStatus.Saved, "Original title")
+        memos["a"] = FakeMemo().apply { records.add(original) }
+        start()
+        composeRule.onNodeWithTag("memo_tab").performClick()
+        composeRule.onNodeWithTag("memo_title_input").performTextInput("Unfinished title")
+        composeRule.onNodeWithTag("memo_input").performScrollTo().performTextInput("Unfinished new note")
+        composeRule.onNodeWithTag("memo_list").performScrollToNode(hasTestTag("edit_memo_saved"))
+        composeRule.onNodeWithTag("edit_memo_saved").performClick()
+        composeRule.onNodeWithTag("memo_edit_title").performTextReplacement("Unconfirmed title")
+        composeRule.onNodeWithTag("memo_edit_text").performTextReplacement("Unconfirmed changes")
+        composeRule.onNodeWithTag("memo_edit_cancel").performClick()
+        composeRule.onNodeWithTag("memo_list").performScrollToNode(hasTestTag("memo_title_input"))
+        composeRule.onNodeWithTag("memo_title_input").assertTextContains("Unfinished title")
+        composeRule.onNodeWithTag("memo_input").assertTextContains("Unfinished new note")
+        composeRule.runOnIdle { assertEquals(listOf(original), memos.getValue("a").records) }
+    }
+
+    @Test
     fun selectedHistoryContinuesItsConversationAndNewChatStartsWithoutAnId() {
         start()
         composeRule.onNodeWithTag("chat_history_button").performClick()
@@ -132,6 +207,76 @@ class HomeScreenTest {
         composeRule.onNodeWithTag("memo_tab").performClick()
         assertEquals("", composeRule.onNodeWithTag("memo_input").fetchSemanticsNode()
             .config[SemanticsProperties.EditableText].text)
+    }
+
+    @Test
+    fun signingBackIntoTheSameAccountRestoresBothUnsubmittedDrafts() {
+        start()
+        composeRule.onNodeWithTag("chat_input").performTextInput("Unsent chat")
+        composeRule.onNodeWithTag("memo_tab").performClick()
+        composeRule.onNodeWithTag("memo_input").performTextInput("Unfinished memo")
+        composeRule.onNodeWithTag("draft_local_status").assertTextEquals("Draft saved on this device")
+        composeRule.onNodeWithTag("home_sign_out_button").performClick()
+        composeRule.onNodeWithTag("google_sign_in_button").performClick()
+        composeRule.onNodeWithTag("memo_input").assertTextContains("Unfinished memo")
+        composeRule.onNodeWithTag("chat_tab").performClick()
+        composeRule.onNodeWithTag("chat_input").assertTextContains("Unsent chat")
+        composeRule.runOnIdle {
+            assertTrue(chats.getValue("a").sentTo.isEmpty())
+            assertTrue(memos.getValue("a").prompts.isEmpty())
+        }
+    }
+
+    @Test
+    fun failedTranscriptionShowsRetryAndUsesTheRecordingWithoutSavingOrSending() {
+        transcriptionFailures = 1
+        start()
+        composeRule.onNodeWithTag("memo_tab").performClick()
+        composeRule.onNodeWithTag("memo_input").performTextInput("Existing note")
+        composeRule.onNodeWithTag("speech_record_button").performClick()
+        composeRule.onNodeWithTag("speech_stop_button").performClick()
+        composeRule.onNodeWithTag("speech_recording_kept").assertIsDisplayed()
+        composeRule.onNodeWithTag("speech_retry_button").performClick()
+        composeRule.onNodeWithTag("speech_use_text_button").performClick()
+        composeRule.onNodeWithTag("memo_input").assertTextContains("Existing note\nRecognized speech")
+        composeRule.runOnIdle {
+            assertEquals(2, transcriptionCalls)
+            assertTrue(memos.getValue("a").prompts.isEmpty())
+        }
+    }
+
+    @Test
+    fun discardingAFailedRecordingMakesRecordingAvailableAgain() {
+        transcriptionFailures = 1
+        start()
+        composeRule.onNodeWithTag("speech_record_button").performClick()
+        composeRule.onNodeWithTag("speech_stop_button").performClick()
+        composeRule.onNodeWithTag("speech_discard_button").performClick()
+        composeRule.onNodeWithTag("speech_record_button").assertIsDisplayed()
+        composeRule.onNodeWithTag("speech_retry_button").assertDoesNotExist()
+        assertEquals("", composeRule.onNodeWithTag("chat_input").fetchSemanticsNode()
+            .config[SemanticsProperties.EditableText].text)
+    }
+
+    @Test
+    fun recordingRetryWaitsForItsOriginalDestinationToFinishSavingEvenOnAnotherTab() {
+        transcriptionFailures = 1
+        val gate = CompletableDeferred<Unit>()
+        memos["a"] = FakeMemo().apply { saveGate = gate }
+        start()
+        composeRule.onNodeWithTag("memo_tab").performClick()
+        composeRule.onNodeWithTag("memo_input").performTextInput("First memo")
+        composeRule.onNodeWithTag("speech_record_button").performClick()
+        composeRule.onNodeWithTag("speech_stop_button").performClick()
+        composeRule.onNodeWithTag("save_memo_button").performScrollTo().performClick()
+        composeRule.onNodeWithTag("confirm_save_memo_button").performClick()
+        composeRule.onNodeWithTag("chat_tab").performClick()
+        composeRule.onNodeWithTag("speech_retry_button").assertIsNotEnabled()
+        composeRule.runOnIdle { gate.complete(Unit) }
+        composeRule.onNodeWithTag("speech_retry_button").assertIsEnabled().performClick()
+        composeRule.onNodeWithTag("speech_use_text_button").performClick()
+        composeRule.onNodeWithTag("memo_input").assertTextContains("Recognized speech")
+        composeRule.runOnIdle { assertEquals(listOf("First memo"), memos.getValue("a").prompts) }
     }
 
     @Test
@@ -242,6 +387,86 @@ class HomeScreenTest {
     }
 
     @Test
+    fun noteSummarySendsOnceAndItsSourceKeepsTheOriginalAfterEditingAndReopening() {
+        val original = Memo("one", "Project discussion\n\nReview the report on Friday.", "date",
+            SheetSaveStatus.Saved, "Project meeting")
+        memos["a"] = FakeMemo().apply { records.add(original) }
+        start()
+        composeRule.onNodeWithTag("memo_tab").performClick()
+        composeRule.onNodeWithTag("memo_list").performScrollToNode(hasTestTag("memo_action_summary_one"))
+        composeRule.onNodeWithTag("memo_action_summary_one").performClick()
+        composeRule.onNodeWithTag("conversation_title").assertTextEquals("Summary · Project meeting")
+        composeRule.onNodeWithTag("chat_messages").performScrollToNode(hasTestTag("source_102_one_p2"))
+        composeRule.onNodeWithTag("source_102_one_p2").performClick()
+        composeRule.onNodeWithTag("source_note_title").assertTextEquals(original.title)
+        composeRule.onNodeWithTag("source_original_quote").assertTextEquals("Review the report on Friday.")
+        composeRule.onNodeWithTag("source_answer_excerpt").assertTextEquals("Reply: ${MemoAction.Summary.prompt}")
+        composeRule.onNodeWithTag("source_full_note_button").performScrollTo().performClick()
+        composeRule.onNodeWithTag("source_full_note").assertTextEquals(original.prompt)
+        composeRule.onNodeWithText("Close").performClick()
+        composeRule.onNodeWithTag("memo_tab").performClick()
+        composeRule.onNodeWithTag("memo_list").performScrollToNode(hasTestTag("edit_memo_one"))
+        composeRule.onNodeWithTag("edit_memo_one").performClick()
+        composeRule.onNodeWithTag("memo_edit_title").performTextReplacement("Changed title")
+        composeRule.onNodeWithTag("memo_edit_text").performTextReplacement("Different content")
+        composeRule.onNodeWithTag("memo_edit_save").performClick()
+        composeRule.onNodeWithTag("chat_tab").performClick()
+        composeRule.onNodeWithTag("new_chat_button").performClick()
+        composeRule.onNodeWithTag("chat_history_button").performClick()
+        composeRule.onNodeWithTag("conversation_c-new").performClick()
+        composeRule.onNodeWithTag("chat_messages").performScrollToNode(hasTestTag("source_102_one_p2"))
+        composeRule.onNodeWithTag("source_102_one_p2").performClick()
+        composeRule.onNodeWithTag("source_note_title").assertTextEquals(original.title)
+        composeRule.onNodeWithTag("source_original_quote").assertTextEquals("Review the report on Friday.")
+        composeRule.runOnIdle {
+            assertEquals(listOf(MemoAction.Summary), chats.getValue("a").sentActions)
+            assertEquals("Different content", memos.getValue("a").records.single().prompt)
+        }
+    }
+
+    @Test
+    fun askThisNoteKeepsTheQuestionAndWaitsForSend() {
+        memos["a"] = FakeMemo().apply { records.add(Memo("one", "Report due Friday", "date", SheetSaveStatus.Saved)) }
+        start()
+        composeRule.onNodeWithTag("chat_input").performTextInput("When is the report due?")
+        composeRule.onNodeWithTag("memo_tab").performClick()
+        composeRule.onNodeWithTag("memo_list").performScrollToNode(hasTestTag("memo_action_ask_one"))
+        composeRule.onNodeWithTag("memo_action_ask_one").performClick()
+        composeRule.onNodeWithTag("chat_input").assertTextContains("When is the report due?")
+        composeRule.onNodeWithTag("attached_memos_button").assertTextContains("Attached memos (1)")
+        composeRule.runOnIdle { assertTrue(chats.getValue("a").sentTo.isEmpty()) }
+        composeRule.onNodeWithTag("send_message_button").performClick()
+        composeRule.runOnIdle { assertEquals(listOf(MemoAction.Ask), chats.getValue("a").sentActions) }
+    }
+
+    @Test
+    fun automaticNoteActionsRequireAnExplicitChoiceBeforeReplacingAnUnsentQuestion() {
+        memos["a"] = FakeMemo().apply { records.add(Memo("one", "Report due Friday", "date", SheetSaveStatus.Saved)) }
+        start()
+        composeRule.onNodeWithTag("chat_input").performTextInput("Keep this question")
+        composeRule.onNodeWithTag("memo_tab").performClick()
+        composeRule.onNodeWithTag("memo_list").performScrollToNode(hasTestTag("memo_action_todos_one"))
+        composeRule.onNodeWithTag("memo_action_todos_one").performClick()
+        composeRule.onNodeWithTag("keep_chat_draft").performClick()
+        composeRule.onNodeWithTag("chat_tab").performClick()
+        composeRule.onNodeWithTag("chat_input").assertTextContains("Keep this question")
+        composeRule.runOnIdle { assertTrue(chats.getValue("a").sentTo.isEmpty()) }
+        composeRule.onNodeWithTag("memo_tab").performClick()
+        composeRule.onNodeWithTag("memo_list").performScrollToNode(hasTestTag("memo_action_todos_one"))
+        composeRule.onNodeWithTag("memo_action_todos_one").performClick()
+        composeRule.onNodeWithTag("confirm_memo_action").performClick()
+        composeRule.onNodeWithTag("message_101").assertTextEquals(MemoAction.Todos.prompt)
+        composeRule.onNodeWithTag("memo_tab").performClick()
+        composeRule.onNodeWithTag("memo_list").performScrollToNode(hasTestTag("memo_action_bilingual_one"))
+        composeRule.onNodeWithTag("memo_action_bilingual_one").performClick()
+        composeRule.onNodeWithTag("message_103").assertTextEquals(MemoAction.Bilingual.prompt)
+        composeRule.runOnIdle {
+            assertEquals(listOf(MemoAction.Todos, MemoAction.Bilingual), chats.getValue("a").sentActions)
+            assertEquals(listOf(null, null), chats.getValue("a").sentTo)
+        }
+    }
+
+    @Test
     fun cancellingMemoSelectionKeepsTheQuestionAndDoesNotAttachOrSendAnything() {
         memos["a"] = FakeMemo().apply {
             records.add(Memo("one", "Golf note", "2026-10-28T12:00:00Z", SheetSaveStatus.Saved))
@@ -343,6 +568,7 @@ class HomeScreenTest {
     private class FakeChat(private val sourceMemos: () -> List<Memo>) : ChatRepository {
         val sentTo = mutableListOf<String?>()
         val sentMemoIds = mutableListOf<List<String>>()
+        val sentActions = mutableListOf<MemoAction?>()
         private val date = "2026-10-28T12:00:00+00:00"
         private val saved = mutableMapOf<String, ConversationContent>()
         override suspend fun conversations() = listOf(Conversation("c-old", "Earlier chat", date, date)) +
@@ -350,7 +576,8 @@ class HomeScreenTest {
         override suspend fun messages(conversationId: String) = saved[conversationId] ?: ConversationContent(listOf(
             ChatMessage(1, MessageRole.User, "My sport is golf.", date),
             ChatMessage(2, MessageRole.Assistant, "I will remember golf in this conversation.", date)))
-        override suspend fun send(message: String, conversationId: String?, memoIds: List<String>): ChatTurn {
+        override suspend fun send(message: String, conversationId: String?, memoIds: List<String>, memoAction: MemoAction?): ChatTurn {
+            sentActions.add(memoAction)
             sentTo.add(conversationId)
             sentMemoIds.add(memoIds)
             val id = 100L + sentTo.size * 2
@@ -359,9 +586,16 @@ class HomeScreenTest {
             val context = if (conversationId == null) memoIds.map { selected ->
                 sourceMemos().first { it.id == selected }.asContext()
             } else previous.memoContext
+            val reply = "Reply: $message"
+            val sections = context.firstOrNull()?.let { memo ->
+                val paragraphs = memo.prompt.split("\n\n")
+                val index = if (paragraphs.size > 1) 1 else 0
+                listOf(AnswerSection(reply, AnswerKind.Note,
+                    listOf(MemoSource(memo.id, memo.displayTitle, "p${index + 1}", paragraphs[index].trim()))))
+            }.orEmpty()
             val turn = ChatTurn(target, listOf(
                 ChatMessage(id - 1, MessageRole.User, message, date),
-                ChatMessage(id, MessageRole.Assistant, "Reply: $message", date)), SheetSaveStatus.Saved, context)
+                ChatMessage(id, MessageRole.Assistant, reply, date, sections)), SheetSaveStatus.Saved, context)
             saved[target] = ConversationContent(previous.messages + turn.messages, context)
             return turn
         }
@@ -370,11 +604,20 @@ class HomeScreenTest {
         val prompts = mutableListOf<String>()
         val records = mutableListOf<Memo>()
         var sheetStatus = SheetSaveStatus.Saved
+        var saveGate: CompletableDeferred<Unit>? = null
         override suspend fun memos(): List<Memo> = records.toList()
-        override suspend fun save(prompt: String, requestId: String): Memo {
+        override suspend fun save(prompt: String, requestId: String, title: String?): Memo {
             prompts.add(prompt)
-            return Memo("note-${prompts.size}", prompt, "2026-10-28T12:00:00Z", sheetStatus)
+            saveGate?.await()
+            return Memo("note-${prompts.size}", prompt, "2026-10-28T12:00:00Z", sheetStatus, title ?: defaultMemoTitle(prompt))
                 .also { records.add(0, it) }
+        }
+        override suspend fun update(memoId: String, title: String, prompt: String, version: Int): Memo {
+            val previous = records.find { it.id == memoId } ?: throw ApiException(ApiIssue.NotFound)
+            if (previous.version != version) throw ApiException(ApiIssue.Conflict)
+            return previous.copy(title = title, prompt = prompt, version = version + 1,
+                updatedAt = "2026-10-31T12:00:00Z", sheetStatus = SheetSaveStatus.Outdated)
+                .also { updated -> records.removeAll { it.id == memoId }; records.add(0, updated) }
         }
     }
 }

@@ -68,6 +68,7 @@ dependencies {
     implementation(libs.retrofit.gson)
     implementation(libs.okhttp.core)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.datastore.core)
     implementation(libs.androidx.credentials.core)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.google.identity)

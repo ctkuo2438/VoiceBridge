@@ -15,11 +15,12 @@ def save_memo(
     chat_session,
     *,
     request_id: str | None = None,
+    title: str | None = None,
     credentials_path: str,
     spreadsheet_id: str,
     sheet_name: str,
 ):
-    row, created = db.create_memo(chat_session["user_id"], prompt, request_id)
+    row, created = db.create_memo(chat_session["user_id"], prompt, request_id, title=title)
     if created:
         try:
             result = append_prompt(
@@ -41,7 +42,8 @@ def save_memo(
                 "code": "sheets_internal_error",
                 "error": "Could not confirm the Google Sheets copy. Your memo is saved in the app.",
             }
-        row = db.save_memo_sheet_result(row["id"], chat_session["user_id"], sheet)
+        row = db.save_memo_sheet_result(row["id"], chat_session["user_id"], sheet, expected_prompt=prompt)
+        sheet = json.loads(row["sheet_result"]) if row["sheet_result"] else sheet
     else:
         # A retry must not append another Sheet row, including while the first request is running.
         sheet = json.loads(row["sheet_result"]) if row["sheet_result"] else {
@@ -54,3 +56,8 @@ def save_memo(
 
 def list_memos(user_id: str):
     return db.list_memos(user_id)
+
+
+def update_memo(user_id: str, memo_id: str, *, title: str, prompt: str, version: int):
+    row = db.update_memo(user_id, memo_id, title=title, prompt=prompt, version=version)
+    return {"saved": True, "memo": db.public_memo(row)}

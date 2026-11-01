@@ -9,6 +9,9 @@ import com.zhenting.voicebridge.MainDispatcherRule
 import com.zhenting.voicebridge.data.model.UserProfile
 import com.zhenting.voicebridge.data.repository.AuthRepository
 import com.zhenting.voicebridge.data.repository.GoogleLoginChallenge
+import com.zhenting.voicebridge.data.local.RecoveryStore
+import com.zhenting.voicebridge.data.local.MemoDraft
+import java.io.IOException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runCurrent
@@ -39,6 +42,45 @@ class WorkspaceViewModelTest {
             repo.user.value = UserProfile("b", "Bob", null, null); runCurrent()
             assertNotSame(first, model.workspace.value)
             assertEquals("b", model.workspace.value!!.userId)
+        } finally { parent.clear() }
+    }
+
+    @Test
+    fun recoveryIsScopedToTheAccountAndReturnsOnlyWhenThatAccountSignsIn() = runTest {
+        val repo = FakeAuth()
+        val recoveries = mutableMapOf<String, RecoveryStore>()
+        val parent = ViewModelStore()
+        val model = ViewModelProvider(parent, WorkspaceViewModel.factory(repo) { id ->
+            recoveries.getOrPut(id) { RecoveryStore() }
+        })[WorkspaceViewModel::class.java]
+        try {
+            repo.user.value = UserProfile("a", "Alice", null, null); runCurrent()
+            model.workspace.value!!.recovery.update { it.copy(memo = MemoDraft("Alice unfinished note")) }
+            repo.user.value = UserProfile("b", "Bob", null, null); runCurrent()
+            assertEquals("", model.workspace.value!!.recovery.snapshot.memo.text)
+            repo.user.value = UserProfile("a", "Alice", null, null); runCurrent()
+            assertEquals("Alice unfinished note", model.workspace.value!!.recovery.snapshot.memo.text)
+        } finally { parent.clear() }
+    }
+
+    @Test
+    fun localReadFailureIsReportedAndCanBeRetriedWithoutCreatingAnEmptyWorkspace() = runTest {
+        val repo = FakeAuth()
+        var readable = false
+        val recovery = RecoveryStore().apply { update { it.copy(memo = MemoDraft("Keep this draft")) } }
+        val parent = ViewModelStore()
+        val model = ViewModelProvider(parent, WorkspaceViewModel.factory(repo) {
+            if (!readable) throw IOException("Storage unavailable")
+            recovery
+        })[WorkspaceViewModel::class.java]
+        try {
+            repo.user.value = UserProfile("a", "Alice", null, null); runCurrent()
+            assertTrue(model.storageError.value)
+            assertNull(model.workspace.value)
+            readable = true
+            model.retryRestore(); runCurrent()
+            assertFalse(model.storageError.value)
+            assertEquals("Keep this draft", model.workspace.value!!.recovery.snapshot.memo.text)
         } finally { parent.clear() }
     }
 

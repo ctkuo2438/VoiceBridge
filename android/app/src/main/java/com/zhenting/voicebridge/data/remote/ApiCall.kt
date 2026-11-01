@@ -36,7 +36,7 @@ suspend fun <T : Any> apiCall(mutation: Boolean = false, call: suspend () -> Res
             response.code() == 401 -> ApiIssue.SessionExpired
             code == "conversation_not_found" -> ApiIssue.NotFound
             code == "memo_not_found" -> ApiIssue.NotFound
-            code == "conversation_changed" -> ApiIssue.Conflict
+            code == "conversation_changed" || code == "memo_changed" -> ApiIssue.Conflict
             code == "memo_request_conflict" -> ApiIssue.Conflict
             code in setOf("sheets_timeout", "sheets_write_unconfirmed", "sheets_invalid_response") -> ApiIssue.SaveUnconfirmed
             response.code() == 400 -> ApiIssue.InvalidInput

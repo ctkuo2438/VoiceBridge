@@ -31,6 +31,7 @@ fun MemoContextPreview(
             LazyColumn(Modifier.heightIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 items(memos, key = { it.id }) { memo ->
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(memo.displayTitle, style = MaterialTheme.typography.titleSmall)
                         Text(displayTimestamp(memo.createdAt), style = MaterialTheme.typography.bodySmall)
                         SelectionContainer { Text(memo.prompt) }
                         if (onRemove != null) TextButton(onClick = { onRemove(memo.id) },

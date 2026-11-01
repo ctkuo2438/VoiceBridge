@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -47,6 +48,8 @@ import com.zhenting.voicebridge.R
 import com.zhenting.voicebridge.data.model.Conversation
 import com.zhenting.voicebridge.data.model.MAX_CHAT_CHARACTERS
 import com.zhenting.voicebridge.data.model.MessageRole
+import com.zhenting.voicebridge.data.model.MemoSource
+import com.zhenting.voicebridge.data.model.AnswerKind
 import com.zhenting.voicebridge.data.model.SheetSaveStatus
 import com.zhenting.voicebridge.data.model.chatCharacterCount
 import com.zhenting.voicebridge.ui.components.RequestError
@@ -77,6 +80,7 @@ fun ChatScreen(
     val keyboard = LocalSoftwareKeyboardController.current
     var showHistory by rememberSaveable { mutableStateOf(false) }
     var showMemoContext by rememberSaveable { mutableStateOf(false) }
+    var selectedSource by remember { mutableStateOf<Pair<Long, MemoSource>?>(null) }
     val listState = rememberLazyListState()
     LaunchedEffect(state.messages.size, state.conversationId) {
         if (state.messages.isNotEmpty()) listState.scrollToItem(state.messages.lastIndex)
@@ -144,6 +148,20 @@ fun ChatScreen(
                                     else MaterialTheme.colorScheme.primary)
                             SelectionContainer { Text(message.content, style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier.testTag("message_${message.id}")) }
+                            val sources = message.sections.flatMap { it.sources }.distinctBy { it.memoId to it.paragraphId }
+                            if (sources.isNotEmpty()) {
+                                Text(stringResource(R.string.chat_sources), style = MaterialTheme.typography.labelMedium)
+                                for (source in sources) TextButton(onClick = { keyboard?.hide(); selectedSource = message.id to source },
+                                    modifier = Modifier.testTag("source_${message.id}_${source.memoId}_${source.paragraphId}")) {
+                                    Text(stringResource(R.string.chat_source_link, source.memoTitle, source.paragraphId.drop(1)))
+                                }
+                            }
+                            if (message.sections.any { it.kind == AnswerKind.General }) Text(
+                                stringResource(R.string.chat_general_explanation), style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (message.sections.any { it.kind == AnswerKind.NotFound }) Text(
+                                stringResource(R.string.chat_not_in_notes), style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
                             if (message.role == MessageRole.Assistant) ReadAloudControl(
                                 "chat:${state.conversationId.orEmpty()}:${message.id}", message.content,
                                 ttsState, onReadAloud, onStopSpeech,
@@ -192,6 +210,13 @@ fun ChatScreen(
                     else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
             }
         }
+    }
+    selectedSource?.let { (messageId, source) ->
+        val message = state.messages.find { it.id == messageId }
+        val memo = state.memoContext.find { it.id == source.memoId }
+        if (message != null && memo != null) MemoSourcePreview(source,
+            message.sections.filter { section -> section.sources.any { it.memoId == source.memoId && it.paragraphId == source.paragraphId } }
+                .joinToString("\n\n") { it.text }, memo, onDismiss = { selectedSource = null })
     }
     if (showMemoContext && state.memoContext.isNotEmpty()) MemoContextPreview(
         state.memoContext,

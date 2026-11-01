@@ -35,6 +35,7 @@ def chat():
         model=current_app.config["OPENAI_MODEL"],
         reasoning_effort=current_app.config["OPENAI_REASONING_EFFORT"],
         memo_ids=data.get("memo_ids"),
+        memo_action=data.get("memo_action"),
     )
     try:
         # write to google sheet

@@ -39,15 +39,26 @@ data class ApiErrorResponse(val code: String? = null)
 data class ChatRequest(
     val message: String,
     @SerializedName("conversation_id") val conversationId: String? = null,
-    @SerializedName("memo_ids") val memoIds: List<String>? = null
+    @SerializedName("memo_ids") val memoIds: List<String>? = null,
+    @SerializedName("memo_action") val memoAction: String? = null
 )
 
 data class MessageResponse(
     val id: Long? = null,
     val role: String? = null,
     val content: String? = null,
-    @SerializedName("created_at") val createdAt: String? = null
+    @SerializedName("created_at") val createdAt: String? = null,
+    val sections: List<AnswerSectionResponse?>? = null
 )
+
+data class MemoSourceResponse(
+    @SerializedName("memo_id") val memoId: String? = null,
+    @SerializedName("memo_title") val memoTitle: String? = null,
+    @SerializedName("paragraph_id") val paragraphId: String? = null,
+    val quote: String? = null
+)
+data class AnswerSectionResponse(val text: String? = null, val kind: String? = null,
+    val sources: List<MemoSourceResponse?>? = null)
 
 data class ConversationResponse(
     val id: String? = null,
@@ -82,19 +93,27 @@ data class ChatResponse(
 data class MemoContextResponse(
     val id: String? = null,
     val prompt: String? = null,
-    @SerializedName("created_at") val createdAt: String? = null
+    @SerializedName("created_at") val createdAt: String? = null,
+    val title: String? = null
 )
 
 data class MemoRequest(
     val prompt: String,
-    @SerializedName("request_id") val requestId: String
+    @SerializedName("request_id") val requestId: String,
+    val title: String? = null
 )
+
+data class MemoUpdateRequest(val title: String, val prompt: String, val version: Int)
 
 data class MemoResponse(
     val id: String? = null,
     val prompt: String? = null,
     @SerializedName("created_at") val createdAt: String? = null,
-    @SerializedName("sheet_status") val sheetStatus: String? = null
+    @SerializedName("sheet_status") val sheetStatus: String? = null,
+    @SerializedName("sheet_outdated") val sheetOutdated: Boolean? = null,
+    val title: String? = null,
+    @SerializedName("updated_at") val updatedAt: String? = null,
+    val version: Int? = null
 )
 
 data class MemosResponse(val memos: List<MemoResponse?>? = null)
